@@ -183,7 +183,7 @@ export default class MyPlugin extends Plugin {
 		return allTFiles;
 	}
 
-	async scanVault() {
+	async scanVault(file:TFile) {
 		new Notice('Scanning vault, check console for details...');
 		console.info("Checking connection to Anki...")
 		try {
@@ -197,20 +197,23 @@ export default class MyPlugin extends Plugin {
 		const data: ParsedSettings = await settingToData(this.app, this.settings, this.fields_dict)
 		const scanDir = this.app.vault.getAbstractFileByPath(this.settings.Defaults["Scan Directory"])
 		let manager = null;
-		if (scanDir !== null) {
-			let markdownFiles = [];
-			if (scanDir instanceof TFolder) {
-				console.info("Using custom scan directory: " + scanDir.path)
-				markdownFiles = this.getAllTFilesInFolder(scanDir);
-			} else {
-				new Notice("Error: incorrect path for scan directory " + this.settings.Defaults["Scan Directory"])
-				return
-			}
-			manager = new FileManager(this.app, data, markdownFiles, this.file_hashes, this.added_media)
-		} else {
-			manager = new FileManager(this.app, data, this.app.vault.getMarkdownFiles(), this.file_hashes, this.added_media);
-		}
-		
+    if (file !== undefined) {
+        manager = new FileManager(this.app, data, [file], this.file_hashes, this.added_media);
+    } else {
+      if (scanDir !== null) {
+        let markdownFiles = [];
+        if (scanDir instanceof TFolder) {
+          console.info("Using custom scan directory: " + scanDir.path)
+          markdownFiles = this.getAllTFilesInFolder(scanDir);
+        } else {
+          new Notice("Error: incorrect path for scan directory " + this.settings.Defaults["Scan Directory"])
+          return
+        }
+        manager = new FileManager(this.app, data, markdownFiles, this.file_hashes, this.added_media)
+      } else {
+        manager = new FileManager(this.app, data, this.app.vault.getMarkdownFiles(), this.file_hashes, this.added_media);
+      }
+    }
 		await manager.initialiseFiles()
 		await manager.requests_1()
 		this.added_media = Array.from(manager.added_media_set)
@@ -253,14 +256,22 @@ export default class MyPlugin extends Plugin {
 		this.addSettingTab(new SettingsTab(this.app, this));
 
 		this.addRibbonIcon('anki', 'Obsidian_to_Anki - Scan Vault', async () => {
-			await this.scanVault()
+			await this.scanVault(undefined)
 		})
 
 		this.addCommand({
 			id: 'anki-scan-vault',
 			name: 'Scan Vault',
 			callback: async () => {
-			 	await this.scanVault()
+			 	await this.scanVault(undefined)
+			 }
+		})
+
+		this.addCommand({
+			id: 'anki-scan-file',
+			name: 'Scan Current File',
+			callback: async () => {
+			 	await this.scanVault(this.app.workspace.getActiveFile())
 			 }
 		})
 	}
