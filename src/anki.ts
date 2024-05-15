@@ -105,19 +105,10 @@ export function changeDeck(card_ids: number[], deck: string): AnkiConnectRequest
 	)
 }
 
-export function removeTags(note_ids: number[], tags: string): AnkiConnectRequest {
+export function updateNoteTags(note_id: number, tags: string[]): AnkiConnectRequest {
 	return request(
-		'removeTags', {
-			notes: note_ids,
-			tags: tags
-		}
-	)
-}
-
-export function addTags(note_ids: number[], tags: string): AnkiConnectRequest {
-	return request(
-		'addTags', {
-			notes: note_ids,
+		'updateNoteTags', {
+			note: note_id,
 			tags: tags
 		}
 	)
