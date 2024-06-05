@@ -306,19 +306,21 @@ export class FileManager {
         let temp: AnkiConnect.AnkiConnectRequest[] = []
         console.info("Requesting cards to be moved to target deck...")
         for (let file of this.ownFiles) {
-            let deck = file.getChangeDecks()
-            if (deck.params.cards && deck.params.cards.length) {
-              temp.push(deck)
-            }
+            temp.push(file.getChangeDecks())
         }
         requests.push(AnkiConnect.multi(temp))
         temp = []
         console.info("Requesting tags to be replaced...")
         for (let file of this.ownFiles) {
-            let update = file.getUpdateTags()
-            if(update.params.actions.length) {
-              temp.push(update)
+            let rem = file.getClearTags()
+            if(rem.params.notes.length) {
+                temp.push(rem)
             }
+        }
+        requests.push(AnkiConnect.multi(temp))
+        temp = []
+        for (let file of this.ownFiles) {
+            temp.push(file.getAddTags())
         }
         requests.push(AnkiConnect.multi(temp))
         temp = []
