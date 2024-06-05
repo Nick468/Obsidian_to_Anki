@@ -1,4 +1,4 @@
-import { Notice, Plugin, addIcon, TFile, TFolder } from 'obsidian'
+import { Notice, Plugin, addIcon, TFile, TFolder, TAbstractFile} from 'obsidian'
 import * as AnkiConnect from './src/anki'
 import { PluginSettings, ParsedSettings } from './src/interfaces/settings-interface'
 import { DEFAULT_IGNORED_FILE_GLOBS, SettingsTab } from './src/settings'
@@ -183,32 +183,48 @@ export default class MyPlugin extends Plugin {
 		return allTFiles;
 	}
 
-	async scanVault() {
+	async scanVault(scanDirOverwrite?:TAbstractFile) {
 		new Notice('Scanning vault, check console for details...');
 		console.info("Checking connection to Anki...")
 		try {
 			await AnkiConnect.invoke('modelNames')
 		}
 		catch(e) {
-			new Notice("Error, couldn't connect to Anki! Check console for error message.")
-			return
+			new Notice("Error, couldn't connect to Anki! Check console for error message.");
+			return;
 		}
-		new Notice("Successfully connected to Anki! This could take a few minutes - please don't close Anki until the plugin is finished")
-		const data: ParsedSettings = await settingToData(this.app, this.settings, this.fields_dict)
-		const scanDir = this.app.vault.getAbstractFileByPath(this.settings.Defaults["Scan Directory"])
+		new Notice("Successfully connected to Anki! This could take a few minutes - please don't close Anki until the plugin is finished");
+		const data: ParsedSettings = await settingToData(this.app, this.settings, this.fields_dict);
+		let scanDir;
+		if(scanDirOverwrite == null){
+			// global scan
+			scanDir = this.app.vault.getAbstractFileByPath(this.settings.Defaults["Scan Directory"])
+			if(scanDir == null){
+				new Notice("Cannot find global Scan Directory");
+				return;
+			}
+		}else{
+			// coming from right click
+			scanDir = scanDirOverwrite;
+		}
+		
 		let manager = null;
+
 		if (scanDir !== null) {
 			let markdownFiles = [];
 			if (scanDir instanceof TFolder) {
-				console.info("Using custom scan directory: " + scanDir.path)
+				console.info("Using custom scan directory: " + scanDir.path);
 				markdownFiles = this.getAllTFilesInFolder(scanDir);
 			} else {
-				new Notice("Error: incorrect path for scan directory " + this.settings.Defaults["Scan Directory"])
-				return
+				console.info("Only scanning file: " + scanDir.name);
+				markdownFiles = scanDir;
 			}
-			manager = new FileManager(this.app, data, markdownFiles, this.file_hashes, this.added_media)
+			manager = new FileManager(this.app, data, markdownFiles, this.file_hashes, this.added_media);
 		} else {
-			manager = new FileManager(this.app, data, this.app.vault.getMarkdownFiles(), this.file_hashes, this.added_media);
+			//shouldt be empty, but I am leaving this here for possible fuck ups
+			//manager = new FileManager(this.app, data, this.app.vault.getMarkdownFiles(), this.file_hashes, this.added_media);
+			new Notice("Error: Dafuq happend?");
+			return;
 		}
 		
 		await manager.initialiseFiles()
@@ -252,9 +268,23 @@ export default class MyPlugin extends Plugin {
 
 		this.addSettingTab(new SettingsTab(this.app, this));
 
+		/*
+		Left-hand ribbon icon for total file scan
 		this.addRibbonIcon('anki', 'Obsidian_to_Anki - Scan Vault', async () => {
 			await this.scanVault()
-		})
+		})*/
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", async (menu, file) => {
+				menu.addItem((item) => {
+					item.setTitle("Anki update")
+						.setIcon("anki")
+						.onClick(async () => {
+							this.scanVault(file);
+						});
+				});
+			})
+		);		
 
 		this.addCommand({
 			id: 'anki-scan-vault',
