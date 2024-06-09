@@ -281,3 +281,4 @@ tests/test_config/*
 tests/test_vault/*
 tests/specs_gen/*
 tests/test_outputs/*
+*.xlsx

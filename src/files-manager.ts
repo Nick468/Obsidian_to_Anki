@@ -138,11 +138,14 @@ export class FileManager {
             const content: string = await this.app.vault.read(file)
             const cache: CachedMetadata = this.app.metadataCache.getCache(file.path)
             const file_data = this.dataToFileData(file)
+            const fullPath: string = (file.path.slice(0, -file.extension.length - 1))
             this.ownFiles.push(
                 new AllFile(
                     content,
                     file.path,
+                    fullPath,
                     this.data.add_file_link ? this.getUrl(file) : "",
+                   // this.data.add_file_link ? this.getUrl(file).slice(0,-3)+"%23%5E" : "",
                     file_data,
                     cache
                 )
