@@ -10,7 +10,7 @@ import { FileData } from './interfaces/settings-interface'
 
 const TAG_PREFIX:string = "Tags: "
 export const TAG_SEP:string = " "
-export const ID_REGEXP_STR: string = String.raw`\n?(?:<!--)?(?:ID: (\d+).*)`
+export const ID_REGEXP_STR: string = String.raw`\n*(?:<!--ID:\s)(\d{13})-->`
 export const TAG_REGEXP_STR: string = String.raw`(Tags: .*)`
 const OBS_TAG_REGEXP: RegExp = /(?<!\[\[)(?<!color:)#(\w+)(?![^\[]*\]\])/g
 
