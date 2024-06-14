@@ -70,6 +70,7 @@ export class FileManager {
         this.file_hashes = file_hashes
         this.added_media_set = new Set(added_media)
     }
+    
     getUrl(file: TFile): string {
         return "obsidian://open?vault=" + encodeURIComponent(this.data.vault_name) + String.raw`&file=` + encodeURIComponent(file.path)
     }

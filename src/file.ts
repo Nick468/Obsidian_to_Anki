@@ -429,8 +429,8 @@ export class AllFile extends AbstractFile {
 
     scanFile() {
         this.setupScan()
-        this.scanNotes()
-        this.scanInlineNotes()
+        //this.scanNotes()
+        //this.scanInlineNotes()
         for (let note_type in this.custom_regexps) {
             const regexp_str: string = this.custom_regexps[note_type]
             if (regexp_str) {

@@ -45,6 +45,7 @@ export default class MyPlugin extends Plugin {
 			},
 			IGNORED_FILE_GLOBS: DEFAULT_IGNORED_FILE_GLOBS,
 		}
+		
 		/*Making settings from scratch, so need note types*/
 		this.note_types = await AnkiConnect.invoke('modelNames') as Array<string>
 		this.fields_dict = await this.generateFieldsDict()
