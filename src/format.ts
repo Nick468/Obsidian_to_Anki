@@ -122,6 +122,10 @@ export class FormatConverter {
 			return note_text
 		}
 		for (let link of this.file_cache.links) {
+			if(link.original == ""){
+				console.warn("Link not working: ", link.displayText)
+				continue
+			}
 			note_text = note_text.replace(new RegExp(c.escapeRegex(link.original), "g"), '<a href="' + this.getUrlFromLink(link.link) + '">' + link.displayText + "</a>")
 		}
 		return note_text
