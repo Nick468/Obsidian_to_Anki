@@ -15,6 +15,8 @@ const DISPLAY_CODE_REPLACE:string = "OBSTOANKICODEDISPLAY"
 
 const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(?:(?<!})}(?!}))/g
 
+const HR_REGEXP:RegExp = /^---/gm
+
 const IMAGE_EXTS: string[] = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".tiff"]
 const AUDIO_EXTS: string[] = [".wav", ".m4a", ".flac", ".mp3", ".wma", ".aac", ".webm"]
 
@@ -125,6 +127,11 @@ export class FormatConverter {
 		return note_text
 	}
 
+	formatHR(note_text: string): string {
+		note_text = note_text.replace(HR_REGEXP, "\n<hr>")
+		return note_text	
+	}
+
 	censor(note_text: string, regexp: RegExp, mask: string): [string, string[]] {
 		/*Take note_text and replace every match of regexp with mask, simultaneously adding it to a string array*/
 		let matches: string[] = []
@@ -161,6 +168,7 @@ export class FormatConverter {
 		}
 		note_text = this.getAndFormatMedias(note_text)
 		note_text = this.formatLinks(note_text)
+		note_text = this.formatHR(note_text)
 		//Special for formatting highlights now, but want to avoid any == in code
 		note_text = note_text.replace(HIGHLIGHT_REGEXP, String.raw`<mark>$1</mark>`)
 		note_text = this.decensor(note_text, DISPLAY_CODE_REPLACE, display_code_matches, false)
