@@ -16,6 +16,7 @@ const DISPLAY_CODE_REPLACE:string = "OBSTOANKICODEDISPLAY"
 const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(?:(?<!})}(?!}))/g
 
 const HR_REGEXP:RegExp = /^---/gm
+const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n>.*)*/g
 
 const IMAGE_EXTS: string[] = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".tiff"]
 const AUDIO_EXTS: string[] = [".wav", ".m4a", ".flac", ".mp3", ".wma", ".aac", ".webm"]
@@ -59,7 +60,10 @@ export class FormatConverter {
         return "obsidian://open?vault=" + encodeURIComponent(this.vault_name) + String.raw`&file=` + encodeURIComponent(link)
     }
 
-	format_note_with_url(note: AnkiConnectNote, url: string, field: string): void {
+	format_note_with_url(note: AnkiConnectNote, url: string, field: string, heading?: string): void {
+		if(heading)
+			note.fields[field] += '<br><a href="' + url + "%23" + heading + '" class="obsidian-link">Obsidian</a>'
+		else
 		note.fields[field] += '<br><a href="' + url + '" class="obsidian-link">Obsidian</a>'
 	}
 
@@ -136,6 +140,11 @@ export class FormatConverter {
 		return note_text	
 	}
 
+	formatCallouts(note_text: string): string {
+		note_text = note_text.replace(CALLOUTS_REGEXP, "{$1}")
+		return note_text	
+	}
+
 	censor(note_text: string, regexp: RegExp, mask: string): [string, string[]] {
 		/*Take note_text and replace every match of regexp with mask, simultaneously adding it to a string array*/
 		let matches: string[] = []
@@ -170,9 +179,10 @@ export class FormatConverter {
 			}
 			note_text = this.curly_to_cloze(note_text)
 		}
+		note_text = this.formatHR(note_text)
+		note_text = this.formatCallouts(note_text)
 		note_text = this.getAndFormatMedias(note_text)
 		note_text = this.formatLinks(note_text)
-		note_text = this.formatHR(note_text)
 		//Special for formatting highlights now, but want to avoid any == in code
 		note_text = note_text.replace(HIGHLIGHT_REGEXP, String.raw`<mark>$1</mark>`)
 		note_text = this.decensor(note_text, DISPLAY_CODE_REPLACE, display_code_matches, false)
