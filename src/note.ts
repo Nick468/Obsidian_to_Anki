@@ -290,7 +290,8 @@ export class RegexNote {
 		template["fields"] = this.getFields()
 		const file_link_fields = data.file_link_fields
 		if (url) {
-            this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type])
+            //this.match[1] contains the heading
+            this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type], this.match[1])
         }
         if (Object.keys(frozen_fields_dict).length) {
             this.formatter.format_note_with_frozen_fields(template, frozen_fields_dict)
