@@ -158,31 +158,7 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
-	/**
-	 * Recursively traverse a TFolder and return all TFiles.
-	 * @param tfolder - The TFolder to start the traversal from.
-	 * @returns An array of TFiles found within the folder and its subfolders.
-	 */
-	getAllTFilesInFolder(tfolder) {
-		const allTFiles = [];
-		// Check if the provided object is a TFolder
-		if (!(tfolder instanceof TFolder)) {
-			return allTFiles;
-		}
-		// Iterate through the contents of the folder
-		tfolder.children.forEach((child) => {
-			// If it's a TFile, add it to the result
-			if (child instanceof TFile) {
-				allTFiles.push(child);
-			} else if (child instanceof TFolder) {
-				// If it's a TFolder, recursively call the function on it
-				const filesInSubfolder = this.getAllTFilesInFolder(child);
-				allTFiles.push(...filesInSubfolder);
-			}
-			// Ignore other types of files or objects
-		});
-		return allTFiles;
-	}
+
 
 	async deleteIDs(file:TFile){
 		let content = await this.app.vault.read(file)
@@ -224,15 +200,12 @@ export default class MyPlugin extends Plugin {
 		let manager = null;
 
 		if (scanDir !== null) {
-			let markdownFiles = [];
 			if (scanDir instanceof TFolder) {
 				console.info("Using custom scan directory: " + scanDir.path);
-				markdownFiles = this.getAllTFilesInFolder(scanDir);
 			} else {
 				console.info("Only scanning file: " + scanDir.name);
-				markdownFiles.push(scanDir);
 			}
-			manager = new FileManager(this.app, data, markdownFiles, this.file_hashes, this.added_media);
+			manager = new FileManager(this.app, data, scanDir, this.file_hashes, this.added_media);
 		} else {
 			//shouldt be empty, but I am leaving this here for possible fuck ups
 			//manager = new FileManager(this.app, data, this.app.vault.getMarkdownFiles(), this.file_hashes, this.added_media);

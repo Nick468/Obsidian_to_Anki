@@ -440,6 +440,8 @@ export class AllFile extends AbstractFile {
         }
         this.all_notes_to_add = this.notes_to_add.concat(this.inline_notes_to_add).concat(this.regex_notes_to_add)
         this.scanDeletions()
+        //look if anything was found in the file; return false if not
+        return (this.inline_notes_to_add.length +  this.notes_to_add.length +  this.notes_to_delete.length +  this.notes_to_edit.length +  this.regex_notes_to_add.length) == 0 ? false : true 
     }
 
     fix_newline_ids() {

@@ -1,5 +1,5 @@
 /*Class for managing a list of files, and their Anki requests.*/
-import { ParsedSettings, FileData } from './interfaces/settings-interface'
+import { ParsedSettings, FileData} from './interfaces/settings-interface'
 import { App, TFile, TFolder, TAbstractFile, CachedMetadata, FileSystemAdapter, Notice } from 'obsidian'
 import { AllFile } from './file'
 import * as AnkiConnect from './anki'
@@ -60,9 +60,18 @@ export class FileManager {
     requests_1_result: any
     added_media_set: Set<string>
 
-    constructor(app: App, data:ParsedSettings, files: TFile[], file_hashes: Record<string, string>, added_media: string[]) {
+    constructor(app: App, data:ParsedSettings, scanDir: TFile, file_hashes: Record<string, string>, added_media: string[]) {
         this.app = app
         this.data = data
+
+        let files = [];
+        if(scanDir instanceof TFolder){
+            files = this.getAllTFilesInFolder(scanDir)
+        }else{
+            if(scanDir.extension != "md")
+                return
+            files.push(scanDir)
+        }
 
         this.files = this.findFilesThatAreNotIgnored(files, data);
 
@@ -82,6 +91,29 @@ export class FileManager {
         let notIgnoredFiles = files.filter(file => !ignoredFiles.contains(file.path))
         return notIgnoredFiles;
     }
+
+    /**
+	 * Recursively traverse a TFolder and return all TFiles.
+	 * @param tfolder - The TFolder to start the traversal from.
+	 * @returns An array of TFiles found within the folder and its subfolders.
+	 */
+	getAllTFilesInFolder(tfolder) {
+		const allTFiles = [];
+		// Iterate through the contents of the folder
+		tfolder.children.forEach((child) => {
+			// If it's a TFile, add it to the result
+			if (child instanceof TFile) {
+                if(child.extension == "md")
+				    allTFiles.push(child); 
+			} else if (child instanceof TFolder) {
+				// If it's a TFolder, recursively call the function on it
+				const filesInSubfolder = this.getAllTFilesInFolder(child);
+				allTFiles.push(...filesInSubfolder);
+			}
+			// Ignore other types of files or objects
+		});
+		return allTFiles;
+	}
 
     getFolderPathList(file: TFile): TFolder[] {
         let result: TFolder[] = []
@@ -146,7 +178,6 @@ export class FileManager {
                     file.path,
                     fullPath,
                     this.data.add_file_link ? this.getUrl(file) : "",
-                   // this.data.add_file_link ? this.getUrl(file).slice(0,-3)+"%23%5E" : "",
                     file_data,
                     cache
                 )
@@ -164,9 +195,10 @@ export class FileManager {
             if (!(this.file_hashes.hasOwnProperty(file.path) && file.getHash() === this.file_hashes[file.path])) {
                 //Indicates it's changed or new
                 console.info("Scanning ", file.path, "as it's changed or new.")
-                file.scanFile()
-                files_changed.push(file)
-                obfiles_changed.push(this.files[i])
+                if(file.scanFile()){
+                    files_changed.push(file)
+                    obfiles_changed.push(this.files[i])
+                }
             }
         }
         this.ownFiles = files_changed
