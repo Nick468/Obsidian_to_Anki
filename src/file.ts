@@ -135,7 +135,7 @@ abstract class AbstractFile {
     setup_target_deck() {
         if(true){
             this.target_deck = this.fullPath.replaceAll("/","::")
-            this.target_deck = "Obsidian::" + this.target_deck
+            this.target_deck = this.data.template["deckName"] + "::" + this.target_deck
         }
         else{
             const result = this.file.match(this.data.DECK_REGEXP)
