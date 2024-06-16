@@ -13,6 +13,8 @@ const MATH_REPLACE:string = "OBSTOANKIMATH"
 const INLINE_CODE_REPLACE:string = "OBSTOANKICODEINLINE"
 const DISPLAY_CODE_REPLACE:string = "OBSTOANKICODEDISPLAY"
 
+const MERMAID_CODE_REPLACE = "OBSTOANKIMERMAIDDISPLAY"
+
 const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(?:(?<!})}(?!}))/g
 
 const HR_REGEXP:RegExp = /^---/gm
@@ -163,15 +165,28 @@ export class FormatConverter {
 		return note_text
 	}
 
+	formatMermaidMatches(mermaidMatches: string[]){
+		for(let [idx, list_item] of mermaidMatches.entries()){
+			const MERMAID_BEG_REGEXP:RegExp = /```mermaid/g
+			const MERMAID_END_REGEXP:RegExp = /```/g
+			mermaidMatches[idx] = mermaidMatches[idx].replace(MERMAID_BEG_REGEXP, '<div class="mermaid">')
+			mermaidMatches[idx] = mermaidMatches[idx].replace(MERMAID_END_REGEXP, '</div>')
+			}
+		return mermaidMatches
+	}
+
 	format(note_text: string, cloze: boolean, highlights_to_cloze: boolean): string {
 		note_text = this.obsidian_to_anki_math(note_text)
 		//Extract the parts that are anki math
 		let math_matches: string[]
 		let inline_code_matches: string[]
 		let display_code_matches: string[]
+		let mermaidMatches: string[]
 		const add_highlight_css: boolean = note_text.match(c.OBS_DISPLAY_CODE_REGEXP) ? true : false;
 		[note_text, math_matches] = this.censor(note_text, ANKI_MATH_REGEXP, MATH_REPLACE);
 		[note_text, display_code_matches] = this.censor(note_text, c.OBS_DISPLAY_CODE_REGEXP, DISPLAY_CODE_REPLACE);
+		[note_text, mermaidMatches] = this.censor(note_text, c.OBS_MERMAID_REGEXP, MERMAID_CODE_REPLACE);
+		mermaidMatches = this.formatMermaidMatches(mermaidMatches);
 		[note_text, inline_code_matches] = this.censor(note_text, c.OBS_CODE_REGEXP, INLINE_CODE_REPLACE);
 		if (cloze) {
 			if (highlights_to_cloze) {
@@ -189,6 +204,7 @@ export class FormatConverter {
 		note_text = this.decensor(note_text, INLINE_CODE_REPLACE, inline_code_matches, false)
 		note_text = converter.makeHtml(note_text)
 		note_text = this.decensor(note_text, MATH_REPLACE, math_matches, true).trim()
+		note_text = this.decensor(note_text, MERMAID_CODE_REPLACE, mermaidMatches, false)
 		// Remove unnecessary paragraph tag
 		if (note_text.startsWith(PARA_OPEN) && note_text.endsWith(PARA_CLOSE)) {
 			note_text = note_text.slice(PARA_OPEN.length, -1 * PARA_CLOSE.length)
