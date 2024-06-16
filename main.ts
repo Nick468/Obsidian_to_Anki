@@ -184,6 +184,13 @@ export default class MyPlugin extends Plugin {
 		return allTFiles;
 	}
 
+	async deleteIDs(file:TFile){
+		let content = await this.app.vault.read(file)
+		const REPL_ID_REGEXP: RegExp = /^(<!--ID:\s\d{13}-->)/gm
+		content = content.replace(REPL_ID_REGEXP, "")
+		this.app.vault.modify(file, content)
+	}
+
 	async scanVault(scanDirOverwrite?:TAbstractFile) {
 		new Notice('Scanning vault, check console for details...');
 		console.info("Checking connection to Anki...")
@@ -287,6 +294,17 @@ export default class MyPlugin extends Plugin {
 			})
 		);		
 
+		this.addCommand({
+			id: "anki-delete-id",
+			name: "Delete IDs from active file",
+			callback: async() => {
+				const noteFile = this.app.workspace.getActiveFile()
+				if(!noteFile.name) 
+					return;
+				await this.deleteIDs(noteFile)
+			},
+		});
+
 
 		/*this.addCommand({
 			id: 'anki-scan-vault',
@@ -297,9 +315,11 @@ export default class MyPlugin extends Plugin {
 		})*/
 	}
 
+
 	async onunload() {
 		console.log("Saving settings for Obsidian_to_Anki...")
 		this.saveAllData()
 		console.log('unloading Obsidian_to_Anki...');
 	}
 }
+
