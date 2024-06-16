@@ -205,8 +205,13 @@ export default class MyPlugin extends Plugin {
 		const data: ParsedSettings = await settingToData(this.app, this.settings, this.fields_dict);
 		let scanDir;
 		if(scanDirOverwrite == null){
-			// global scan
-			scanDir = this.app.vault.getAbstractFileByPath(this.settings.Defaults["Scan Directory"])
+			// scan of the Scan Directory (Settings)
+			let scanDirStr = this.settings.Defaults["Scan Directory"]
+			// no Scan Directory set (scanning the entire vault)
+			if(scanDirStr == ""){
+				scanDirStr = "/"
+			}
+			scanDir = this.app.vault.getAbstractFileByPath(scanDirStr)
 			if(scanDir == null){
 				new Notice("Cannot find global Scan Directory");
 				return;
