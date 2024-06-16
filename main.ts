@@ -287,13 +287,14 @@ export default class MyPlugin extends Plugin {
 			})
 		);		
 
-		this.addCommand({
+
+		/*this.addCommand({
 			id: 'anki-scan-vault',
 			name: 'Scan Vault',
 			callback: async () => {
 			 	await this.scanVault()
 			 }
-		})
+		})*/
 	}
 
 	async onunload() {
