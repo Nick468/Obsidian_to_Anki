@@ -218,7 +218,7 @@ export default class MyPlugin extends Plugin {
 				markdownFiles = this.getAllTFilesInFolder(scanDir);
 			} else {
 				console.info("Only scanning file: " + scanDir.name);
-				markdownFiles = scanDir;
+				markdownFiles.push(scanDir);
 			}
 			manager = new FileManager(this.app, data, markdownFiles, this.file_hashes, this.added_media);
 		} else {
