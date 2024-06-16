@@ -111,7 +111,7 @@ export class FormatConverter {
 				} else if (IMAGE_EXTS.includes(extname(embed.link))) {
 					note_text = note_text.replace(
 						new RegExp(c.escapeRegex(embed.original), "g"),
-						'<img src="' + basename(embed.link) + '" alt="' + embed.displayText + '">'
+						'<img src="' + basename(embed.link) + '" width="' + embed.displayText + '">'
 					)
 				} else {
 					console.warn("Unsupported extension: ", extname(embed.link))
