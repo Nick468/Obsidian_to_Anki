@@ -306,13 +306,13 @@ export default class MyPlugin extends Plugin {
 		});
 
 
-		/*this.addCommand({
+		this.addCommand({
 			id: 'anki-scan-vault',
-			name: 'Scan Vault',
+			name: 'Scan Vault (Scan Directory)',
 			callback: async () => {
 			 	await this.scanVault()
 			 }
-		})*/
+		})
 	}
 
 
