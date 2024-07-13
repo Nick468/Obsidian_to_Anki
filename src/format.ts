@@ -115,6 +115,14 @@ export class FormatConverter {
 						new RegExp(c.escapeRegex(embed.original), "g"),
 						'<img src="' + basename(embed.link) + '" width="' + embed.displayText + '">'
 					)
+				} else if (embed.link.contains(".pdf")){
+					let pageNumber = embed.link
+					pageNumber = pageNumber.replace (new RegExp(/#page=(\d+)/g), "$1")
+					let embedLink = basename(embed.link) + "_Page" + pageNumber + ".png"
+					note_text = note_text.replace(
+						new RegExp(c.escapeRegex(embed.original), "g"),
+						'<img src="' + embedLink + '">')				
+
 				} else {
 					console.warn("Unsupported extension: ", extname(embed.link))
 				}
