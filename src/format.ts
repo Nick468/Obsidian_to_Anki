@@ -17,6 +17,8 @@ const MERMAID_CODE_REPLACE = "OBSTOANKIMERMAIDDISPLAY"
 
 const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(?:(?<!})}(?!}))/g
 
+const BLOCK_LINK_REGEXP:RegExp = /\^[a-zA-Z0-9-]+(?=\n)/g
+
 const HR_REGEXP:RegExp = /^---/gm
 const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
 
@@ -155,6 +157,11 @@ export class FormatConverter {
 		return note_text	
 	}
 
+	removeBlockLinks(note_text: string): string {
+		note_text = note_text.replace(BLOCK_LINK_REGEXP, "")
+		return note_text
+	}
+
 	censor(note_text: string, regexp: RegExp, mask: string): [string, string[]] {
 		/*Take note_text and replace every match of regexp with mask, simultaneously adding it to a string array*/
 		let matches: string[] = []
@@ -204,6 +211,7 @@ export class FormatConverter {
 		}
 		note_text = this.formatHR(note_text)
 		note_text = this.formatCallouts(note_text)
+		note_text = this.removeBlockLinks(note_text)
 		note_text = this.getAndFormatMedias(note_text)
 		note_text = this.formatLinks(note_text)
 		//Special for formatting highlights now, but want to avoid any == in code
