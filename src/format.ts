@@ -19,6 +19,8 @@ const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(
 
 const BLOCK_LINK_REGEXP:RegExp = /\^[a-zA-Z0-9-]+(?=\n)/g
 
+const OBSIDIAN_COMMENT_REGEXP:RegExp = /%%[\S\s]*?%%/g
+
 const HR_REGEXP:RegExp = /^---/gm
 const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
 
@@ -162,6 +164,11 @@ export class FormatConverter {
 		return note_text
 	}
 
+	removeObsidianComments(note_text: string): string {
+		note_text = note_text.replace(OBSIDIAN_COMMENT_REGEXP, "")
+		return note_text
+	}
+
 	censor(note_text: string, regexp: RegExp, mask: string): [string, string[]] {
 		/*Take note_text and replace every match of regexp with mask, simultaneously adding it to a string array*/
 		let matches: string[] = []
@@ -191,6 +198,8 @@ export class FormatConverter {
 	}
 
 	format(note_text: string, cloze: boolean, highlights_to_cloze: boolean): string {
+		note_text = this.removeObsidianComments(note_text)
+
 		note_text = this.obsidian_to_anki_math(note_text)
 		//Extract the parts that are anki math
 		let math_matches: string[]
