@@ -21,7 +21,7 @@ const BLOCK_LINK_REGEXP:RegExp = /\^[a-zA-Z0-9-]+(?=\n)/g
 
 const OBSIDIAN_COMMENT_REGEXP:RegExp = /%%[\S\s]*?%%/g
 
-const HR_REGEXP:RegExp = /^---/gm
+const HR_REGEXP:RegExp = /^\s*-{3,}/gm
 const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
 
 const IMAGE_EXTS: string[] = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".tiff", ".webp"]
