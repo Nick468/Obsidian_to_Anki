@@ -10,9 +10,9 @@ import { FileData } from './interfaces/settings-interface'
 
 const TAG_PREFIX:string = "Tags: "
 export const TAG_SEP:string = " "
-export const ID_REGEXP_STR: string = String.raw`\n*(?:<!--ID:\s)(\d{13})-->`
+export const ID_REGEXP_STR: string = String.raw`\n*<!--ID:\s?(\d{13})\s?(?:\[\[([^|#]*).*\]\]\s*)?-->`
 export const TAG_REGEXP_STR: string = String.raw`(Tags: .*)`
-const OBS_TAG_REGEXP: RegExp = /(?:\s)#(\w+)/g
+const OBS_TAG_REGEXP: RegExp = /(?:\s|>)#(\w+)/g
 
 const ANKI_CLOZE_REGEXP: RegExp = /{{c\d+::[\s\S]+?}}/
 export const CLOZE_ERROR: number = 42
@@ -286,6 +286,7 @@ export class RegexNote {
 
 	parse(deck: string, url: string = "", frozen_fields_dict: FROZEN_FIELDS_DICT, data: FileData, context: string): AnkiConnectNoteAndID {
 		let template = JSON.parse(JSON.stringify(data.template))
+        template.deckName = deck
 		template["modelName"] = this.note_type
 		template["fields"] = this.getFields()
 		const file_link_fields = data.file_link_fields

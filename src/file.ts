@@ -14,7 +14,7 @@ import { CachedMetadata, HeadingCache } from 'obsidian'
 const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
 
 function id_to_str(identifier:number, inline:boolean = false, comment:boolean = false): string {
-    let result = "ID: " + identifier.toString()
+    let result = "ID:" + identifier.toString()
     if (comment) {
         result = "<!--" + result + "-->"
     }
@@ -239,7 +239,11 @@ abstract class AbstractFile {
     }
 
     getChangeDecks(): AnkiConnect.AnkiConnectRequest {
-        return AnkiConnect.changeDeck(this.card_ids, this.target_deck)
+        let requests: AnkiConnect.AnkiConnectRequest[] = []
+        for(const note of this.notes_to_edit){
+            requests.push(AnkiConnect.changeDeck([note.identifier], note.note.deckName))
+        }
+        return AnkiConnect.multi(requests)
     }
 
     getClearTags(): AnkiConnect.AnkiConnectRequest {
@@ -381,6 +385,7 @@ export class AllFile extends AbstractFile {
         }
     }
 
+
     search(note_type: string, regexp_str: string) {
         //Search the file for regex matches
         //ignoring matches inside ignore_spans,
@@ -392,11 +397,14 @@ export class AllFile extends AbstractFile {
                 let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
                 for (let match of findignore(regexp, this.file, this.ignore_spans)) {
                     this.ignore_spans.push([match.index, match.index + match[0].length])
+                    let deck = match[match.length-1] ? this.getDeckFromLink(match[match.length-1]) : this.target_deck
+                    match.pop()
                     const parsed: AnkiConnectNoteAndID = new RegexNote(
                         match, note_type, this.data.fields_dict,
                         search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.formatter
                     ).parse(
-                        this.target_deck,
+                        //replace target deck with link in id field
+                        deck,
                         this.url,
                         this.frozen_fields_dict,
                         this.data,
@@ -478,5 +486,16 @@ export class AllFile extends AbstractFile {
         )
         this.file = string_insert(this.file, normal_inserts.concat(inline_inserts).concat(regex_inserts))
         this.fix_newline_ids()
+    }
+    
+    getDeckFromLink(link: string){
+        let tempFile = app.metadataCache.getFirstLinkpathDest(link, "")
+        let deck = tempFile.path.replaceAll("/","::")
+        const index = deck.lastIndexOf('::');
+        if (index != -1) {
+            deck = deck.substring(0, index);
+        }
+        deck = this.data.template["deckName"] + "::" + deck
+        return deck
     }
 }
