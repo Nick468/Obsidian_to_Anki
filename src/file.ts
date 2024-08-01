@@ -388,7 +388,6 @@ export class AllFile extends AbstractFile {
         }
     }
 
-
     search(note_type: string, regexp_str: string) {
         //Search the file for regex matches
         //ignoring matches inside ignore_spans,
@@ -399,11 +398,12 @@ export class AllFile extends AbstractFile {
                 let tag_str = search_tags ? TAG_REGEXP_STR : ""
                 let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
                 for (let match of findignore(regexp, this.file, this.ignore_spans)) {
-                    this.ignore_spans.push([match.index, match.index + match[0].length])
-                    let deck = match[match.length-1] ? this.getDeckFromLink(match[match.length-1]) : this.target_deck
-                    match.pop()
+                    this.ignore_spans.push([match.index, match.index + match[0].length])   
+                    let matchObj = this.formatMatchDict(match, search_id, search_tags)
+                 
+                    let deck = matchObj["link"] ? this.getDeckFromLink(matchObj["link"]) : this.target_deck
                     const parsed: AnkiConnectNoteAndID = new RegexNote(
-                        match, note_type, this.data.fields_dict,
+                        matchObj, note_type, this.data.fields_dict,
                         search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze, this.formatter
                     ).parse(
                         //replace target deck with link in id field
@@ -500,5 +500,28 @@ export class AllFile extends AbstractFile {
         }
         deck = this.data.template["deckName"] + "::" + deck
         return deck
+    }
+
+    formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string>{
+        let match: Record<string, string> = {
+            "allMatch": matchArr[0],
+            "title":    matchArr[1],
+            "text":     matchArr[2],
+        }
+
+        let iterator = 3
+
+        if(search_tags){
+            match["tags"] = matchArr[iterator]
+            iterator++
+        }
+
+        if(search_id){
+            match["id"] = matchArr[iterator]
+            iterator++
+            match["link"] = matchArr[iterator]
+        }
+        
+        return match
     }
 }

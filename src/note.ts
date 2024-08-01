@@ -240,7 +240,7 @@ export class InlineNote extends AbstractNote {
 
 export class RegexNote {
 
-	match: RegExpMatchArray
+	match: Record<string, string>
 	note_type: string
 	groups: Array<string>
 	identifier: number | null
@@ -252,7 +252,7 @@ export class RegexNote {
 	formatter: FormatConverter
 
 	constructor(
-			match: RegExpMatchArray,
+			match: Record<string, string>,
 			note_type: string,
 			fields_dict: FIELDS_DICT,
 			tags: boolean,
@@ -264,8 +264,8 @@ export class RegexNote {
 	) {
 		this.match = match
 		this.note_type = note_type
-		this.identifier = id ? parseInt(this.match.pop()) : null
-		this.tags = tags ? this.match.pop().slice(TAG_PREFIX.length).split(TAG_SEP) : []
+		this.identifier = id ? parseInt(match["id"]) : null
+		this.tags = tags ? match["tags"].slice(TAG_PREFIX.length).split(TAG_SEP) : []
 		this.field_names = fields_dict[note_type]
 		this.curly_cloze = curly_cloze
 		this.formatter = formatter
@@ -278,9 +278,8 @@ export class RegexNote {
         for (let field of this.field_names) {
             fields[field] = ""
         }
-		for (let index in this.match.slice(1)) {
-			fields[this.field_names[index]] = this.match.slice(1)[index] ? this.match.slice(1)[index] : ""
-		}
+        fields[this.field_names[0]] = this.match["title"]
+        fields[this.field_names[1]] = this.match["text"]
 		for (let key in fields) {
             fields[key] = this.formatter.format(
                 fields[key].trim(),
@@ -299,8 +298,7 @@ export class RegexNote {
 		template["fields"] = this.getFields()
 		const file_link_fields = data.file_link_fields
 		if (url) {
-            //this.match[1] contains the heading
-            this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type], this.match[1])
+            this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type], this.match["title"])
         }
         if (Object.keys(frozen_fields_dict).length) {
             this.formatter.format_note_with_frozen_fields(template, frozen_fields_dict)
