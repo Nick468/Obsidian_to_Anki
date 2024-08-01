@@ -406,7 +406,6 @@ export class AllFile extends AbstractFile {
                         matchObj, note_type, this.data.fields_dict,
                         search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze, this.formatter
                     ).parse(
-                        //replace target deck with link in id field
                         deck,
                         this.url,
                         this.frozen_fields_dict,
