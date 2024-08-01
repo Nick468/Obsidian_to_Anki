@@ -26,6 +26,7 @@ export interface PluginSettings {
 		"Add Context": boolean,
 		"CurlyCloze": boolean,
 		"CurlyCloze - Highlights to Clozes": boolean,
+		"Anki custom cloze": boolean,
 		"ID Comments": boolean,
 		"Add Obsidian Tags": boolean
 	},
@@ -51,6 +52,7 @@ export interface FileData {
 
 	curly_cloze: boolean
 	highlights_to_cloze: boolean
+	custom_cloze: boolean
 	comment: boolean
 	add_context: boolean
 	add_obs_tags: boolean

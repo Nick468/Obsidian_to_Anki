@@ -106,6 +106,12 @@ export class FormatConverter {
 		return text
 	}
 
+	custom_cloze(text: string): string {
+		/*Use custom JS cloze in anki card; Format difference: single ":"*/
+		text = text.replace(CLOZE_REGEXP, "{{c1:" + "$2" + "}}")
+		return text
+	}
+
 	getAndFormatMedias(note_text: string): string {
 		if (!(this.file_cache.hasOwnProperty("embeds"))) {
 			return note_text
@@ -198,7 +204,7 @@ export class FormatConverter {
 		return mermaidMatches
 	}
 
-	format(note_text: string, cloze: boolean, highlights_to_cloze: boolean): string {
+	format(note_text: string, cloze: boolean, highlights_to_cloze: boolean, custom_cloze:boolean): string {
 		note_text = this.removeObsidianComments(note_text)
 
 		note_text = this.obsidian_to_anki_math(note_text)
@@ -213,11 +219,15 @@ export class FormatConverter {
 		[note_text, mermaidMatches] = this.censor(note_text, c.OBS_MERMAID_REGEXP, MERMAID_CODE_REPLACE);
 		mermaidMatches = this.formatMermaidMatches(mermaidMatches);
 		[note_text, inline_code_matches] = this.censor(note_text, c.OBS_CODE_REGEXP, INLINE_CODE_REPLACE);
-		if (cloze) {
+		if (cloze||custom_cloze) {
 			if (highlights_to_cloze) {
 				note_text = note_text.replace(HIGHLIGHT_REGEXP, "{$1}")
 			}
-			note_text = this.curly_to_cloze(note_text)
+			if(custom_cloze){
+				note_text = this.custom_cloze(note_text)
+			} else{
+				note_text = this.curly_to_cloze(note_text)
+			}
 		}
 		note_text = this.formatHR(note_text)
 		note_text = this.formatCallouts(note_text)

@@ -40,6 +40,7 @@ export default class MyPlugin extends Plugin {
 				"Add Context": false,
 				"CurlyCloze": false,
 				"CurlyCloze - Highlights to Clozes": false,
+				"Anki custom cloze": false,
 				"ID Comments": true,
 				"Add Obsidian Tags": false,
 			},

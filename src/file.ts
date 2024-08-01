@@ -125,6 +125,7 @@ abstract class AbstractFile {
                 this.data.fields_dict,
                 this.data.curly_cloze,
                 this.data.highlights_to_cloze,
+                this.data.custom_cloze,
                 this.formatter
             ).getFields()
             frozen_fields_dict[note_type] = parsed_fields
@@ -322,6 +323,7 @@ export class AllFile extends AbstractFile {
                 this.data.fields_dict,
                 this.data.curly_cloze,
                 this.data.highlights_to_cloze,
+                this.data.custom_cloze,
                 this.formatter
             ).parse(
                 this.target_deck,
@@ -360,6 +362,7 @@ export class AllFile extends AbstractFile {
                 this.data.fields_dict,
                 this.data.curly_cloze,
                 this.data.highlights_to_cloze,
+                this.data.custom_cloze,
                 this.formatter
             ).parse(
                 this.target_deck,
@@ -401,7 +404,7 @@ export class AllFile extends AbstractFile {
                     match.pop()
                     const parsed: AnkiConnectNoteAndID = new RegexNote(
                         match, note_type, this.data.fields_dict,
-                        search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.formatter
+                        search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze, this.formatter
                     ).parse(
                         //replace target deck with link in id field
                         deck,
