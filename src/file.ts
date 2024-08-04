@@ -8,7 +8,7 @@ import { Md5 } from 'ts-md5/dist/md5';
 import * as AnkiConnect from './anki'
 import * as c from './constants'
 import { FormatConverter } from './format'
-import { CachedMetadata, HeadingCache, App } from 'obsidian'
+import { CachedMetadata, HeadingCache, App, TFile } from 'obsidian'
 
 //const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
 const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
@@ -71,7 +71,7 @@ function* findignore(pattern: RegExp, text: string, ignore_spans: Array<[number,
 }
 
 abstract class AbstractFile {
-    file: string
+    file_content: string
     path: string
     url: string
     original_file: string
@@ -96,12 +96,12 @@ abstract class AbstractFile {
 
     formatter: FormatConverter
 
-    constructor(file_contents: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
+    constructor(file_content: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
         this.data = data
-        this.file = file_contents
+        this.file_content = file_content
+        this.original_file = this.file_content
         this.path = path
         this.url = url
-        this.original_file = this.file
         this.file_cache = file_cache
         this.fullPath = fullPath
         this.formatter = new FormatConverter(file_cache, this.data.vault_name, app, this.path, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze)
@@ -117,7 +117,7 @@ abstract class AbstractFile {
             }
             frozen_fields_dict[note_type] = temp_dict
         }
-        for (let match of this.file.matchAll(this.data.FROZEN_REGEXP)) {
+        for (let match of this.file_content.matchAll(this.data.FROZEN_REGEXP)) {
             const [note_type, fields]: [string, string] = [match[1], match[2]]
             const virtual_note = note_type + "\n" + fields
             /*const parsed_fields: Record<string, string> = new Note(
@@ -139,25 +139,25 @@ abstract class AbstractFile {
             this.target_deck = this.data.template["deckName"] + "::" + this.target_deck
         }
         else {
-            const result = this.file.match(this.data.DECK_REGEXP)
+            const result = this.file_content.match(this.data.DECK_REGEXP)
             this.target_deck = result ? result[1] : this.data.template["deckName"]
         }
 
     }
 
     setup_global_tags() {
-        const result = this.file.match(this.data.TAG_REGEXP)
+        const result = this.file_content.match(this.data.TAG_REGEXP)
         this.global_tags = result ? result[1] : ""
     }
 
     getHash(): string {
-        return Md5.hashStr(this.file) as string
+        return Md5.hashStr(this.file_content) as string
     }
 
     abstract scanFile(): void
 
     scanDeletions() {
-        for (let match of this.file.matchAll(this.data.EMPTY_REGEXP)) {
+        for (let match of this.file_content.matchAll(this.data.EMPTY_REGEXP)) {
             this.notes_to_delete.push(parseInt(match[1]))
         }
     }
@@ -196,10 +196,14 @@ abstract class AbstractFile {
     abstract writeIDs(): void
 
     removeEmpties() {
-        this.file = this.file.replace(this.data.EMPTY_REGEXP, "")
+        //removes notes with the DELETE keyword
+        this.file_content = this.file_content.replace(this.data.EMPTY_REGEXP, "")
     }
 
     getCreateDecks(): AnkiConnect.AnkiConnectRequest {
+        if(this.all_notes_to_add.length == 0)
+            return null
+
         let actions: AnkiConnect.AnkiConnectRequest[] = []
         for (let note of this.all_notes_to_add) {
             actions.push(AnkiConnect.createDeck(note.deckName))
@@ -216,10 +220,15 @@ abstract class AbstractFile {
     }
 
     getDeleteNotes(): AnkiConnect.AnkiConnectRequest {
+        if(this.notes_to_delete.length == 0)
+            return null
         return AnkiConnect.deleteNotes(this.notes_to_delete)
     }
 
     getUpdateFields(): AnkiConnect.AnkiConnectRequest {
+        if(this.notes_to_edit.length == 0)
+            return null
+
         let actions: AnkiConnect.AnkiConnectRequest[] = []
         for (let parsed of this.notes_to_edit) {
             actions.push(
@@ -240,6 +249,9 @@ abstract class AbstractFile {
     }
 
     getChangeDecks(): AnkiConnect.AnkiConnectRequest {
+        if(this.notes_to_edit.length == 0)
+            return null
+
         let requests: AnkiConnect.AnkiConnectRequest[] = []
         for (const note of this.notes_to_edit) {
             requests.push(AnkiConnect.changeDeck([note.identifier], note.note.deckName))
@@ -248,6 +260,9 @@ abstract class AbstractFile {
     }
 
     getClearTags(): AnkiConnect.AnkiConnectRequest {
+        if(this.notes_to_edit.length == 0)
+            return null
+        
         let IDs: number[] = []
         for (let parsed of this.notes_to_edit) {
             IDs.push(parsed.identifier)
@@ -256,6 +271,9 @@ abstract class AbstractFile {
     }
 
     getAddTags(): AnkiConnect.AnkiConnectRequest {
+        if(this.notes_to_edit.length == 0)
+            return null
+        
         let actions: AnkiConnect.AnkiConnectRequest[] = []
         for (let parsed of this.notes_to_edit) {
             actions.push(
@@ -275,30 +293,32 @@ export class AllFile extends AbstractFile {
     regex_notes_to_add: AnkiConnectNote[]
     regex_id_indexes: number[]
     app: App
+    obsidian_file: TFile
 
-    constructor(file_contents: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
+    constructor(file: TFile, file_contents: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
         super(file_contents, path, fullPath, url, data, file_cache, app)
+        this.obsidian_file = file
         this.custom_regexps = data.custom_regexps
         this.app = app
     }
 
     add_spans_to_ignore() {
         this.ignore_spans = []
-        this.ignore_spans.push(...spans(this.data.FROZEN_REGEXP, this.file))
-        const deck_result = this.file.match(this.data.DECK_REGEXP)
+        this.ignore_spans.push(...spans(this.data.FROZEN_REGEXP, this.file_content))
+        const deck_result = this.file_content.match(this.data.DECK_REGEXP)
         if (deck_result) {
             this.ignore_spans.push([deck_result.index, deck_result.index + deck_result[0].length])
         }
-        const tag_result = this.file.match(this.data.TAG_REGEXP)
+        const tag_result = this.file_content.match(this.data.TAG_REGEXP)
         if (tag_result) {
             this.ignore_spans.push([tag_result.index, tag_result.index + tag_result[0].length])
         }
-        this.ignore_spans.push(...spans(this.data.NOTE_REGEXP, this.file))
-        this.ignore_spans.push(...spans(this.data.INLINE_REGEXP, this.file))
-        this.ignore_spans.push(...spans(c.OBS_INLINE_MATH_REGEXP, this.file))
-        this.ignore_spans.push(...spans(c.OBS_DISPLAY_MATH_REGEXP, this.file))
-        this.ignore_spans.push(...spans(c.OBS_CODE_REGEXP, this.file))
-        this.ignore_spans.push(...spans(c.OBS_DISPLAY_CODE_REGEXP, this.file))
+        this.ignore_spans.push(...spans(this.data.NOTE_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(this.data.INLINE_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(c.OBS_INLINE_MATH_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(c.OBS_DISPLAY_MATH_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(c.OBS_CODE_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(c.OBS_DISPLAY_CODE_REGEXP, this.file_content))
     }
 
     setupScan() {
@@ -399,7 +419,7 @@ export class AllFile extends AbstractFile {
                 let id_str = search_id ? ID_REGEXP_STR : ""
                 let tag_str = search_tags ? TAG_REGEXP_STR : ""
                 let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
-                for (let match of findignore(regexp, this.file, this.ignore_spans)) {
+                for (let match of findignore(regexp, this.file_content, this.ignore_spans)) {
                     this.ignore_spans.push([match.index, match.index + match[0].length])
                     let matchObj = this.formatMatchDict(match, search_id, search_tags)
 
@@ -457,7 +477,7 @@ export class AllFile extends AbstractFile {
     }
 
     fix_newline_ids() {
-        this.file = this.file.replace(double_regexp, "$1")
+        this.file_content = this.file_content.replace(double_regexp, "$1")
     }
 
     writeIDs() {
@@ -488,7 +508,7 @@ export class AllFile extends AbstractFile {
                 }
             }
         )
-        this.file = string_insert(this.file, normal_inserts.concat(inline_inserts).concat(regex_inserts))
+        this.file_content = string_insert(this.file_content, normal_inserts.concat(inline_inserts).concat(regex_inserts))
         this.fix_newline_ids()
     }
 
