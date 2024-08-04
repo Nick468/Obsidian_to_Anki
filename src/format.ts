@@ -1,46 +1,22 @@
 import { AnkiConnectNote } from './interfaces/note-interface'
 import { basename, extname } from 'path'
-import { Converter } from 'showdown'
-import { CachedMetadata } from 'obsidian'
+import { CachedMetadata, MarkdownRenderer, Component, App } from 'obsidian'
 import * as c from './constants'
-
-import showdownHighlight from 'showdown-highlight'
 
 const ANKI_MATH_REGEXP:RegExp = /(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))/g
 const HIGHLIGHT_REGEXP:RegExp = /==(.*?)==/g
-const STRIKE_THROUGH_REGEXP:RegExp = /~~(.*?)~~/g
 
 const MATH_REPLACE:string = "OBSTOANKIMATH"
-const INLINE_CODE_REPLACE:string = "OBSTOANKICODEINLINE"
-const DISPLAY_CODE_REPLACE:string = "OBSTOANKICODEDISPLAY"
-
 const MERMAID_CODE_REPLACE = "OBSTOANKIMERMAIDDISPLAY"
 
 const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(?:(?<!})}(?!}))/g
 
-const BLOCK_LINK_REGEXP:RegExp = /\^[a-zA-Z0-9-]+(?=\n)/g
-
-const OBSIDIAN_COMMENT_REGEXP:RegExp = /%%[\S\s]*?%%/g
-
-const HR_REGEXP:RegExp = /^\s*-{3,}/gm
 const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
 
 const IMAGE_EXTS: string[] = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".tiff", ".webp"]
 const AUDIO_EXTS: string[] = [".wav", ".m4a", ".flac", ".mp3", ".wma", ".aac", ".webm"]
 
-const PARA_OPEN:string = "<p>"
-const PARA_CLOSE:string = "</p>"
-
 let cloze_unset_num: number = 1
-
-let converter: Converter = new Converter({
-	simplifiedAutoLink: true,
-	literalMidWordUnderscores: true,
-	tables: true, tasklists: true,
-	simpleLineBreaks: true,
-	requireSpaceBeforeHeadingText: true,
-	extensions: [showdownHighlight]
-})
 
 function escapeHtml(unsafe: string): string {
     return unsafe
@@ -56,11 +32,21 @@ export class FormatConverter {
 	file_cache: CachedMetadata
 	vault_name: string
 	detectedMedia: Set<string>
+	app: App
+	path: string
+	cloze: boolean
+	highlights_to_cloze:  boolean
+	custom_cloze: boolean
 
-	constructor(file_cache: CachedMetadata, vault_name: string) {
+	constructor(file_cache: CachedMetadata, vault_name: string, app: App, path: string, cloze: boolean, highlights_to_cloze: boolean, custom_cloze:boolean) {
 		this.vault_name = vault_name
 		this.file_cache = file_cache
 		this.detectedMedia = new Set()
+		this.app = app
+		this.path = path
+		this.cloze = cloze
+		this.highlights_to_cloze = highlights_to_cloze
+		this.custom_cloze = custom_cloze
 	}
 
 	getUrlFromLink(link: string): string {
@@ -106,7 +92,7 @@ export class FormatConverter {
 		return text
 	}
 
-	custom_cloze(text: string): string {
+	custom_cloze_JS(text: string): string {
 		/*Use custom JS cloze in anki card; Format difference: single ":"*/
 		text = text.replace(CLOZE_REGEXP, "{{c1:" + "$2" + "}}")
 		return text
@@ -117,7 +103,7 @@ export class FormatConverter {
 			return note_text
 		}
 		for (let embed of this.file_cache.embeds) {
-			if (note_text.includes(embed.original)) {
+			if (note_text.includes(embed.original) && extname(embed.link)) {
 				this.detectedMedia.add(embed.link)
 				if (AUDIO_EXTS.includes(extname(embed.link))) {
 					note_text = note_text.replace(new RegExp(c.escapeRegex(embed.original), "g"), "[sound:" + basename(embed.link) + "]")
@@ -151,29 +137,26 @@ export class FormatConverter {
 				console.warn("Link not working: ", link.displayText)
 				continue
 			}
-			note_text = note_text.replace(new RegExp(c.escapeRegex(link.original), "g"), '<a href="' + this.getUrlFromLink(link.link) + '">' + link.displayText + "</a>")
+			note_text = note_text.replace(new RegExp(c.escapeRegex(link.original), "g"), '<a href="' + this.getUrlFromLink(link.link) + '">' + encodeURIComponent(link.displayText) + "</a>")
 		}
 		return note_text
 	}
 
-	formatHR(note_text: string): string {
-		note_text = note_text.replace(HR_REGEXP, "\n<hr>")
-		return note_text	
+	formatEmbedLinks(container: HTMLElement){
+		let elements = container.querySelectorAll('a[data-href]');
+		for (let i = 0; i < elements.length; i++) {
+			elements[i].className = "";
+			elements[i].attributes.removeNamedItem("data-href");
+			let href = this.getUrlFromLink((elements[i] as HTMLAnchorElement).pathname.slice(1));
+			if((elements[i] as HTMLAnchorElement).hash.slice(1))
+				href = href + '%23' + (elements[i] as HTMLAnchorElement).hash.slice(1);
+			(elements[i] as HTMLAnchorElement).href = href;
+		  }
 	}
 
 	formatCallouts(note_text: string): string {
 		note_text = note_text.replace(CALLOUTS_REGEXP, "{$1}")
 		return note_text	
-	}
-
-	removeBlockLinks(note_text: string): string {
-		note_text = note_text.replace(BLOCK_LINK_REGEXP, "")
-		return note_text
-	}
-
-	removeObsidianComments(note_text: string): string {
-		note_text = note_text.replace(OBSIDIAN_COMMENT_REGEXP, "")
-		return note_text
 	}
 
 	censor(note_text: string, regexp: RegExp, mask: string): [string, string[]] {
@@ -204,55 +187,53 @@ export class FormatConverter {
 		return mermaidMatches
 	}
 
-	format(note_text: string, cloze: boolean, highlights_to_cloze: boolean, custom_cloze:boolean): string {
-		note_text = this.removeObsidianComments(note_text)
+	highlight_embed(note_text: string): string{
+		return note_text.replaceAll(	`<div class="markdown-preview-view markdown-rendered show-indentation-guide">`, 
+									`<div class="markdown-preview-view markdown-rendered show-indentation-guide" style="background-color:rgba(245, 248, 249, 0.85);">`)
+	}
 
+	async format(note_text: string): Promise<string> {
 		note_text = this.obsidian_to_anki_math(note_text)
-		//Extract the parts that are anki math
+
+		//Extract inline math and math blocks
 		let math_matches: string[]
-		let inline_code_matches: string[]
-		let display_code_matches: string[]
-		let mermaidMatches: string[]
-		const add_highlight_css: boolean = note_text.match(c.OBS_DISPLAY_CODE_REGEXP) ? true : false;
 		[note_text, math_matches] = this.censor(note_text, ANKI_MATH_REGEXP, MATH_REPLACE);
-		[note_text, display_code_matches] = this.censor(note_text, c.OBS_DISPLAY_CODE_REGEXP, DISPLAY_CODE_REPLACE);
+
+		//Extract mermaid graphs and format them
+		let mermaidMatches: string[]
 		[note_text, mermaidMatches] = this.censor(note_text, c.OBS_MERMAID_REGEXP, MERMAID_CODE_REPLACE);
 		mermaidMatches = this.formatMermaidMatches(mermaidMatches);
-		[note_text, inline_code_matches] = this.censor(note_text, c.OBS_CODE_REGEXP, INLINE_CODE_REPLACE);
-		if (cloze||custom_cloze) {
-			if (highlights_to_cloze) {
+
+		if (this.cloze||this.custom_cloze) {
+			if (this.highlights_to_cloze) {
 				note_text = note_text.replace(HIGHLIGHT_REGEXP, "{$1}")
 			}
-			if(custom_cloze){
-				note_text = this.custom_cloze(note_text)
+			if(this.custom_cloze){
+				note_text = this.custom_cloze_JS(note_text)
 			} else{
 				note_text = this.curly_to_cloze(note_text)
 			}
 		}
-		note_text = this.formatHR(note_text)
+
 		note_text = this.formatCallouts(note_text)
-		note_text = this.removeBlockLinks(note_text)
 		note_text = this.getAndFormatMedias(note_text)
 		note_text = this.formatLinks(note_text)
-		//Special for formatting highlights now, but want to avoid any == in code
-		note_text = note_text.replace(HIGHLIGHT_REGEXP, String.raw`<mark>$1</mark>`)
-		note_text = note_text.replace(STRIKE_THROUGH_REGEXP, String.raw`<s>$1</s>`)
-		note_text = this.decensor(note_text, DISPLAY_CODE_REPLACE, display_code_matches, false)
-		note_text = this.decensor(note_text, INLINE_CODE_REPLACE, inline_code_matches, false)
-		note_text = converter.makeHtml(note_text)
+		
+		//convert markdown to html
+		let container: HTMLElement = document.createElement('converter')
+		let component = new Component
+		await MarkdownRenderer.render(this.app, note_text, container, this.path, component)
+	
+		//links in embeds are not handled in formatLinks, so do it here (but worse, beacause currently not using file cache)
+		this.formatEmbedLinks(container)
+
+		note_text = container.innerHTML
+
+		note_text = this.highlight_embed(note_text)
+
 		note_text = this.decensor(note_text, MATH_REPLACE, math_matches, true).trim()
 		note_text = this.decensor(note_text, MERMAID_CODE_REPLACE, mermaidMatches, false)
-		// Remove unnecessary paragraph tag
-		if (note_text.startsWith(PARA_OPEN) && note_text.endsWith(PARA_CLOSE)) {
-			note_text = note_text.slice(PARA_OPEN.length, -1 * PARA_CLOSE.length)
-		}
-		if (add_highlight_css) {
-			note_text = '<link href="' + c.CODE_CSS_URL + '" rel="stylesheet">' + note_text
-		}
+		
 		return note_text
 	}
-
-
-
-
 }

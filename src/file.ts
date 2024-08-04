@@ -3,17 +3,17 @@
 import { FROZEN_FIELDS_DICT } from './interfaces/field-interface'
 import { AnkiConnectNote, AnkiConnectNoteAndID } from './interfaces/note-interface'
 import { FileData } from './interfaces/settings-interface'
-import { Note, InlineNote, RegexNote, CLOZE_ERROR, NOTE_TYPE_ERROR, TAG_SEP, ID_REGEXP_STR, TAG_REGEXP_STR } from './note'
+import { /*Note, InlineNote,*/ RegexNote, CLOZE_ERROR, NOTE_TYPE_ERROR, TAG_SEP, ID_REGEXP_STR, TAG_REGEXP_STR } from './note'
 import { Md5 } from 'ts-md5/dist/md5';
 import * as AnkiConnect from './anki'
 import * as c from './constants'
 import { FormatConverter } from './format'
-import { CachedMetadata, HeadingCache } from 'obsidian'
+import { CachedMetadata, HeadingCache, App } from 'obsidian'
 
 //const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
 const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
 
-function id_to_str(identifier:number, inline:boolean = false, comment:boolean = false): string {
+function id_to_str(identifier: number, inline: boolean = false, comment: boolean = false): string {
     let result = "ID:" + identifier.toString()
     if (comment) {
         result = "<!--" + result + "-->"
@@ -27,47 +27,47 @@ function id_to_str(identifier:number, inline:boolean = false, comment:boolean = 
 }
 
 function string_insert(text: string, position_inserts: Array<[number, string]>): string {
-	/*Insert strings in position_inserts into text, at indices.
+    /*Insert strings in position_inserts into text, at indices.
 
     position_inserts will look like:
     [(0, "hi"), (3, "hello"), (5, "beep")]*/
-	let offset = 0
-	let sorted_inserts: Array<[number, string]> = position_inserts.sort((a, b):number => a[0] - b[0])
-	for (let insertion of sorted_inserts) {
-		let position = insertion[0]
-		let insert_str = insertion[1]
-		text = text.slice(0, position + offset) + insert_str + text.slice(position + offset)
-		offset += insert_str.length
-	}
-	return text
+    let offset = 0
+    let sorted_inserts: Array<[number, string]> = position_inserts.sort((a, b): number => a[0] - b[0])
+    for (let insertion of sorted_inserts) {
+        let position = insertion[0]
+        let insert_str = insertion[1]
+        text = text.slice(0, position + offset) + insert_str + text.slice(position + offset)
+        offset += insert_str.length
+    }
+    return text
 }
 
 function spans(pattern: RegExp, text: string): Array<[number, number]> {
-	/*Return a list of span-tuples for matches of pattern in text.*/
-	let output: Array<[number, number]> = []
-	let matches = text.matchAll(pattern)
-	for (let match of matches) {
-		output.push(
-			[match.index, match.index + match[0].length]
-		)
-	}
-	return output
+    /*Return a list of span-tuples for matches of pattern in text.*/
+    let output: Array<[number, number]> = []
+    let matches = text.matchAll(pattern)
+    for (let match of matches) {
+        output.push(
+            [match.index, match.index + match[0].length]
+        )
+    }
+    return output
 }
 
 function contained_in(span: [number, number], spans: Array<[number, number]>): boolean {
-	/*Return whether span is contained in spans (+- 1 leeway)*/
-	return spans.some(
-		(element) => span[0] >= element[0] - 1 && span[1] <= element[1] + 1
-	)
+    /*Return whether span is contained in spans (+- 1 leeway)*/
+    return spans.some(
+        (element) => span[0] >= element[0] - 1 && span[1] <= element[1] + 1
+    )
 }
 
 function* findignore(pattern: RegExp, text: string, ignore_spans: Array<[number, number]>): IterableIterator<RegExpMatchArray> {
-	let matches = text.matchAll(pattern)
-	for (let match of matches) {
-		if (!(contained_in([match.index, match.index + match[0].length], ignore_spans))) {
-			yield match
-		}
-	}
+    let matches = text.matchAll(pattern)
+    for (let match of matches) {
+        if (!(contained_in([match.index, match.index + match[0].length], ignore_spans))) {
+            yield match
+        }
+    }
 }
 
 abstract class AbstractFile {
@@ -96,7 +96,7 @@ abstract class AbstractFile {
 
     formatter: FormatConverter
 
-    constructor(file_contents: string, path:string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata) {
+    constructor(file_contents: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
         this.data = data
         this.file = file_contents
         this.path = path
@@ -104,7 +104,7 @@ abstract class AbstractFile {
         this.original_file = this.file
         this.file_cache = file_cache
         this.fullPath = fullPath
-        this.formatter = new FormatConverter(file_cache, this.data.vault_name)
+        this.formatter = new FormatConverter(file_cache, this.data.vault_name, app, this.path, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze)
     }
 
     setup_frozen_fields_dict() {
@@ -120,7 +120,7 @@ abstract class AbstractFile {
         for (let match of this.file.matchAll(this.data.FROZEN_REGEXP)) {
             const [note_type, fields]: [string, string] = [match[1], match[2]]
             const virtual_note = note_type + "\n" + fields
-            const parsed_fields: Record<string, string> = new Note(
+            /*const parsed_fields: Record<string, string> = new Note(
                 virtual_note,
                 this.data.fields_dict,
                 this.data.curly_cloze,
@@ -128,17 +128,17 @@ abstract class AbstractFile {
                 this.data.custom_cloze,
                 this.formatter
             ).getFields()
-            frozen_fields_dict[note_type] = parsed_fields
+            frozen_fields_dict[note_type] = parsed_fields*/
         }
         this.frozen_fields_dict = frozen_fields_dict
     }
 
     setup_target_deck() {
-        if(true){
-            this.target_deck = this.fullPath.replaceAll("/","::")
+        if (true) {
+            this.target_deck = this.fullPath.replaceAll("/", "::")
             this.target_deck = this.data.template["deckName"] + "::" + this.target_deck
         }
-        else{
+        else {
             const result = this.file.match(this.data.DECK_REGEXP)
             this.target_deck = result ? result[1] : this.data.template["deckName"]
         }
@@ -199,7 +199,7 @@ abstract class AbstractFile {
         this.file = this.file.replace(this.data.EMPTY_REGEXP, "")
     }
 
-    getCreateDecks(): AnkiConnect.AnkiConnectRequest {        
+    getCreateDecks(): AnkiConnect.AnkiConnectRequest {
         let actions: AnkiConnect.AnkiConnectRequest[] = []
         for (let note of this.all_notes_to_add) {
             actions.push(AnkiConnect.createDeck(note.deckName))
@@ -241,7 +241,7 @@ abstract class AbstractFile {
 
     getChangeDecks(): AnkiConnect.AnkiConnectRequest {
         let requests: AnkiConnect.AnkiConnectRequest[] = []
-        for(const note of this.notes_to_edit){
+        for (const note of this.notes_to_edit) {
             requests.push(AnkiConnect.changeDeck([note.identifier], note.note.deckName))
         }
         return AnkiConnect.multi(requests)
@@ -274,10 +274,12 @@ export class AllFile extends AbstractFile {
     inline_id_indexes: number[]
     regex_notes_to_add: AnkiConnectNote[]
     regex_id_indexes: number[]
+    app: App
 
-    constructor(file_contents: string, path:string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata) {
-        super(file_contents, path, fullPath, url, data, file_cache)
+    constructor(file_contents: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
+        super(file_contents, path, fullPath, url, data, file_cache, app)
         this.custom_regexps = data.custom_regexps
+        this.app = app
     }
 
     add_spans_to_ignore() {
@@ -314,7 +316,7 @@ export class AllFile extends AbstractFile {
         this.notes_to_delete = []
     }
 
-    scanNotes() {
+    /*scanNotes() {
         for (let note_match of this.file.matchAll(this.data.NOTE_REGEXP)) {
             let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
             // That second thing essentially gets the index of the end of the first capture group.
@@ -351,9 +353,9 @@ export class AllFile extends AbstractFile {
                 this.notes_to_edit.push(parsed)
             }
         }
-    }
+    }*/
 
-    scanInlineNotes() {
+    /*scanInlineNotes() {
         for (let note_match of this.file.matchAll(this.data.INLINE_REGEXP)) {
             let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
             // That second thing essentially gets the index of the end of the first capture group.
@@ -386,9 +388,9 @@ export class AllFile extends AbstractFile {
                 this.notes_to_edit.push(parsed)
             }
         }
-    }
+    }*/
 
-    search(note_type: string, regexp_str: string) {
+    async search(note_type: string, regexp_str: string) {
         //Search the file for regex matches
         //ignoring matches inside ignore_spans,
         //and adding any matches to ignore_spans.
@@ -398,11 +400,11 @@ export class AllFile extends AbstractFile {
                 let tag_str = search_tags ? TAG_REGEXP_STR : ""
                 let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
                 for (let match of findignore(regexp, this.file, this.ignore_spans)) {
-                    this.ignore_spans.push([match.index, match.index + match[0].length])   
+                    this.ignore_spans.push([match.index, match.index + match[0].length])
                     let matchObj = this.formatMatchDict(match, search_id, search_tags)
-                 
+
                     let deck = matchObj["link"] ? this.getDeckFromLink(matchObj["link"]) : this.target_deck
-                    const parsed: AnkiConnectNoteAndID = new RegexNote(
+                    const parsed: AnkiConnectNoteAndID = await new RegexNote(
                         matchObj, note_type, this.data.fields_dict,
                         search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze, this.formatter
                     ).parse(
@@ -438,20 +440,20 @@ export class AllFile extends AbstractFile {
         }
     }
 
-    scanFile() {
+    async scanFile() {
         this.setupScan()
         //this.scanNotes()
         //this.scanInlineNotes()
         for (let note_type in this.custom_regexps) {
             const regexp_str: string = this.custom_regexps[note_type]
             if (regexp_str) {
-                this.search(note_type, regexp_str)
+                await this.search(note_type, regexp_str)
             }
         }
         this.all_notes_to_add = this.notes_to_add.concat(this.inline_notes_to_add).concat(this.regex_notes_to_add)
         this.scanDeletions()
         //look if anything was found in the file; return false if not
-        return (this.inline_notes_to_add.length +  this.notes_to_add.length +  this.notes_to_delete.length +  this.notes_to_edit.length +  this.regex_notes_to_add.length) == 0 ? false : true 
+        return (this.inline_notes_to_add.length + this.notes_to_add.length + this.notes_to_delete.length + this.notes_to_edit.length + this.regex_notes_to_add.length) == 0 ? false : true
     }
 
     fix_newline_ids() {
@@ -489,10 +491,10 @@ export class AllFile extends AbstractFile {
         this.file = string_insert(this.file, normal_inserts.concat(inline_inserts).concat(regex_inserts))
         this.fix_newline_ids()
     }
-    
-    getDeckFromLink(link: string){
-        let tempFile = app.metadataCache.getFirstLinkpathDest(link, "")
-        let deck = tempFile.path.replaceAll("/","::")
+
+    getDeckFromLink(link: string) {
+        let tempFile = this.app.metadataCache.getFirstLinkpathDest(link, "")
+        let deck = tempFile.path.replaceAll("/", "::")
         const index = deck.lastIndexOf('::');
         if (index != -1) {
             deck = deck.substring(0, index);
@@ -501,26 +503,26 @@ export class AllFile extends AbstractFile {
         return deck
     }
 
-    formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string>{
+    formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string> {
         let match: Record<string, string> = {
             "allMatch": matchArr[0],
-            "title":    matchArr[1],
-            "text":     matchArr[2],
+            "title": matchArr[1],
+            "text": matchArr[2],
         }
 
         let iterator = 3
 
-        if(search_tags){
+        if (search_tags) {
             match["tags"] = matchArr[iterator]
             iterator++
         }
 
-        if(search_id){
+        if (search_id) {
             match["id"] = matchArr[iterator]
             iterator++
             match["link"] = matchArr[iterator]
         }
-        
+
         return match
     }
 }

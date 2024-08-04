@@ -114,6 +114,7 @@ abstract class AbstractNote {
 
 }
 
+/*
 export class Note extends AbstractNote {
 
     getSplitText(): string[] {
@@ -143,7 +144,7 @@ export class Note extends AbstractNote {
     fieldFromLine(line: string): [string, string] {
         /*From a given line, determine the next field to add text into.
 
-        Then, return the stripped line, and the field.*/
+        Then, return the stripped line, and the field.*
         for (let field of this.field_names) {
             if (line.startsWith(field + ":")) {
                 return [line.slice((field + ":").length), field]
@@ -173,7 +174,9 @@ export class Note extends AbstractNote {
     }
 
 }
+*/
 
+/*
 export class InlineNote extends AbstractNote {
 
     static TAG_REGEXP: RegExp = /Tags: (.*)/;
@@ -237,6 +240,7 @@ export class InlineNote extends AbstractNote {
 
 
 }
+*/
 
 export class RegexNote {
 
@@ -251,6 +255,7 @@ export class RegexNote {
     custom_cloze: boolean
 	formatter: FormatConverter
 
+
 	constructor(
 			match: Record<string, string>,
 			note_type: string,
@@ -261,7 +266,7 @@ export class RegexNote {
 			highlights_to_cloze: boolean,
             custom_cloze: boolean,
 			formatter: FormatConverter
-	) {
+        ) {
 		this.match = match
 		this.note_type = note_type
 		this.identifier = id ? parseInt(match["id"]) : null
@@ -273,29 +278,29 @@ export class RegexNote {
         this.custom_cloze = custom_cloze
 	}
 
-	getFields(): Record<string, string> {
+	async getFields(): Promise<Record<string, string>> {
 		let fields: Record<string, string> = {}
         for (let field of this.field_names) {
             fields[field] = ""
         }
+
         fields[this.field_names[0]] = this.match["title"]
         fields[this.field_names[1]] = this.match["text"]
-		for (let key in fields) {
-            fields[key] = this.formatter.format(
-                fields[key].trim(),
-                this.note_type.includes("Cloze") && this.curly_cloze,
-				this.highlights_to_cloze,
-                this.custom_cloze
-            ).trim()
+		
+        for (let key in fields) {
+            if(!fields[key])
+                continue
+            fields[key] = await this.formatter.format(fields[key].trim())
+            fields[key].trim()
         }
         return fields
 	}
 
-	parse(deck: string, url: string = "", frozen_fields_dict: FROZEN_FIELDS_DICT, data: FileData, context: string): AnkiConnectNoteAndID {
+	async parse(deck: string, url: string = "", frozen_fields_dict: FROZEN_FIELDS_DICT, data: FileData, context: string): Promise<AnkiConnectNoteAndID> {
 		let template = JSON.parse(JSON.stringify(data.template))
         template.deckName = deck
 		template["modelName"] = this.note_type
-		template["fields"] = this.getFields()
+		template["fields"] = await this.getFields()
 		const file_link_fields = data.file_link_fields
 		if (url) {
             this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type], this.match["title"])

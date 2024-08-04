@@ -5,6 +5,7 @@ import { AllFile } from './file'
 import * as AnkiConnect from './anki'
 import { basename } from 'path'
 import multimatch from "multimatch"
+
 interface addNoteResponse {
     result: number,
     error: string | null
@@ -168,7 +169,33 @@ export class FileManager {
 
     async genAllFiles() {
         for (let file of this.files) {
-            const content: string = await this.app.vault.read(file)
+            let content: string = await this.app.vault.read(file)
+
+            
+            /*
+
+            const container = document.createElement('div');          
+            let subcontainer = container.createSpan();
+            let muck = new Component
+
+            
+            await MarkdownRenderer.render(this.app, content, subcontainer, file.path, muck)
+      
+
+            let matchesEmbeds = content.matchAll(/!\[\[([^#|]+)(?:#([^|[]+))?(?:\|([^]]+))?]]/g)
+            for (let matchEmbed of matchesEmbeds){
+                let tempFile = this.app.metadataCache.getFirstLinkpathDest(matchEmbed[1], "")
+                const text: string = await this.app.vault.cachedRead(tempFile)
+                 let matchesSubstitution = text.matchAll(/^#+\s(.+)\n*((?:\n+(?!#+\s|<!--).+)+)/gm)
+                 for(let matchSubstitution of matchesSubstitution){   
+                    if(matchSubstitution[1] === matchEmbed[2]){
+                        content = content.replace(matchEmbed[0], matchSubstitution[2])
+                    }
+                    break
+                 }
+            }
+*/
+
             const cache: CachedMetadata = this.app.metadataCache.getCache(file.path)
             const file_data = this.dataToFileData(file)
             const fullPath: string = (file.path.slice(0, -file.extension.length - 1))
@@ -179,7 +206,8 @@ export class FileManager {
                     fullPath,
                     this.data.add_file_link ? this.getUrl(file) : "",
                     file_data,
-                    cache
+                    cache,
+                    this.app
                 )
             )
         }
@@ -195,7 +223,7 @@ export class FileManager {
             if (!(this.file_hashes.hasOwnProperty(file.path) && file.getHash() === this.file_hashes[file.path])) {
                 //Indicates it's changed or new
                 console.info("Scanning ", file.path, "as it's changed or new.")
-                if(file.scanFile()){
+                if(await file.scanFile()){
                     files_changed.push(file)
                     obfiles_changed.push(this.files[i])
                 }
