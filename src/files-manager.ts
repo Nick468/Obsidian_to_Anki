@@ -33,10 +33,7 @@ interface Requests1Result {
             error: string | null
         }>
     },
-    1: {
-        error: string | null,
-        result: notesInfoResponse[]
-    },
+    1: any,
     2: any,
     3: any,
     4: any
@@ -204,36 +201,39 @@ export class FileManager {
         this.files = files_changed
     }
 
-    requestHelper(requests: AnkiConnect.AnkiConnectRequest[], fileFunction, consoleLog: string): boolean{
-        let temp    : AnkiConnect.AnkiConnectRequest[] = []
+    requestHelper(requests: AnkiConnect.AnkiConnectRequest[], fileFunction, consoleLog: string, logFiles: boolean = false): AllFile[]{
+        let temp: AnkiConnect.AnkiConnectRequest[] = []
+        let fileLog: AllFile[] = []
 
         for (let file of this.files) {
             let request: AnkiConnect.AnkiConnectRequest = fileFunction(file)
-            //if(request.params.actions.length > 0)
-            if(request != null)
+            if(request != null){
                 temp.push(request)
+                if(logFiles)
+                    fileLog.push(file)
+            }
         }
         if(temp.length > 0){
             console.info(consoleLog)
             requests.push(AnkiConnect.multi(temp))
-            return true
+            if(logFiles)
+                return fileLog
+            return null
         }
-        return false
+        return null
     }
 
     async requests_1() {
         let requests: AnkiConnect.AnkiConnectRequest[] = []
+        let additionRequest: AllFile[] = null
 
-        this.requestHelper(requests, this.getCreateDecks, "Requesting addition of new deck into Anki...")
-        this.requestHelper(requests, this.getAddNotes, "Requesting addition of notes into Anki...")         //response 0
-        this.requestHelper(requests, this.getNoteInfo, "Requesting card IDs of notes to be edited...")      //response 1 
-        console.info("Requesting tag list...")
-        requests.push(AnkiConnect.getTags())                                                                // response 2
-        this.requestHelper(requests, this.getUpdateFields, "Requesting update of fields of existing notes")
+        additionRequest = this.requestHelper(requests, this.getAddNotes, "Requesting addition of notes into Anki...", true)
+        this.requestHelper(requests, this.getUpdateNotes, "Requesting editing of existing notes...") 
         this.requestHelper(requests, this.getDeleteNotes, "Requesting deletion of notes..")
+        this.requestHelper(requests, this.getChangeDecks, "Requesting cards to be moved to target deck...")
           
+        //add media
         let temp: AnkiConnect.AnkiConnectRequest[] = []
-        console.info("Requesting addition of media...")
         for (let file of this.files) {
             const mediaLinks = difference(file.formatter.detectedMedia, this.added_media_set)
             for (let mediaLink of mediaLinks) {
@@ -255,86 +255,46 @@ export class FileManager {
                 }
             }
         }
-        requests.push(AnkiConnect.multi(temp))
+        if(temp.length > 0){
+            requests.push(AnkiConnect.multi(temp))
+            console.info("Requesting addition of media...")
+        }
 
-        const requests_1_result = ((await AnkiConnect.invoke('multi', {actions: requests}) as Array<Object>).slice(1) as any)
-        await this.parse_requests_1(requests_1_result)
+        const requests_1_result: Requests1Result = ((await AnkiConnect.invoke('multi', {actions: requests}) as Array<Object>) as any)
+        await this.parse_requests_1(requests_1_result, additionRequest)
     }
 
-    async parse_requests_1(requests_1_result:Requests1Result) {
-        /*if (response[5].result.length >= 1 && response[5].result[0].error != null) {
-            new Notice("Please update AnkiConnect! The way the script has added media files has changed.")
-            console.warn("Please update AnkiConnect! The way the script has added media files has changed.")
-        }*/
-
-        const response = requests_1_result as Requests1Result
-        let note_ids_array_by_file: Requests1Result[0]["result"]
-        try {
-            note_ids_array_by_file = AnkiConnect.parse(response[0])
-        } catch(error) {
-            console.error("Error: ", error)
-            note_ids_array_by_file = response[0].result
-        }
 
 
-        const note_info_array_by_file: notesInfoResponse[] = AnkiConnect.parse(response[1])
-        const tag_list: string[] = AnkiConnect.parse(response[2])
-        
-        //react to response
-        for (let index in note_ids_array_by_file) {
-            let i: number = parseInt(index)
-            let file = this.files[i]
-            let file_response: addNoteResponse[]
+    async parse_requests_1(response:Requests1Result, additionRequest: AllFile[]) {
+       //Get the note_ids for the newly created cards reported from anki
+       //add them to the note object, then call writeID 
+        if(additionRequest != null){
+            let new_note_ids: Requests1Result[0]["result"]
             try {
-                file_response = AnkiConnect.parse(note_ids_array_by_file[i])
+                new_note_ids = AnkiConnect.parse(response[0])
             } catch(error) {
                 console.error("Error: ", error)
-                file_response = note_ids_array_by_file[i].result
+                new_note_ids = response[0].result
             }
-            file.note_ids = []
-            for (let index in file_response) {
-                let i = parseInt(index)
-                let response = file_response[i]
-                try {
-                    file.note_ids.push(AnkiConnect.parse(response))
-                } catch (error) {
-                    console.warn("Failed to add note ", file.all_notes_to_add[i], " in file", file.path, " due to error ", error)
-                    file.note_ids.push(response.result)
+
+            for (let i = 0; i < new_note_ids.length; i++) { 
+                let file:AllFile = additionRequest[i]
+                let new_note_ids_file = new_note_ids[i]
+
+                for(let j = 0; j < new_note_ids_file.result.length; j++){
+                    file.all_notes_to_add[j].identifier = new_note_ids_file.result[j].result
                 }
-            }
+              }
         }
 
-        for (let index in note_info_array_by_file) {
-            let i: number = parseInt(index)
-            let file = this.files[i]
-            const file_response = AnkiConnect.parse(note_info_array_by_file[i])
-            let temp: number[] = []
-            for (let note_response of file_response) {
-                temp.push(...note_response.cards)
-            }
-            file.card_ids = temp
-        }
-        
         for (let file of this.files) {
-            file.tags = tag_list
             file.writeIDs()
             file.removeEmpties()
             if (file.file_content !== file.original_file) {
                 await this.app.vault.modify(file.obsidian_file, file.file_content)
             }
         }
-        await this.requests_2()
-    }
-
-    async requests_2() {
-        let requests: AnkiConnect.AnkiConnectRequest[] = []
-        
-        this.requestHelper(requests, this.getChangeDecks, "Requesting cards to be moved to target deck...")
-        //this.requestHelper(requests, this.getClearTags, "Requesting tags to be replaced...")
-        this.requestHelper(requests, this.getAddTags, "")        
-             
-        await AnkiConnect.invoke('multi', {actions: requests})
-        console.info("All done!")
     }
 
     getHashes(): Record<string, string> {
@@ -345,20 +305,12 @@ export class FileManager {
         return result
     }
 
-    getCreateDecks(file: AllFile): AnkiConnect.AnkiConnectRequest{
-        return file.getCreateDecks()
-    }
-
     getAddNotes(file: AllFile): AnkiConnect.AnkiConnectRequest{
         return file.getAddNotes()
     }
 
-    getNoteInfo(file: AllFile): AnkiConnect.AnkiConnectRequest{
-        return file.getNoteInfo()
-    }
-
-    getUpdateFields(file: AllFile): AnkiConnect.AnkiConnectRequest{
-        return file.getUpdateFields()
+    getUpdateNotes(file: AllFile): AnkiConnect.AnkiConnectRequest{
+        return file.getUpdateNotes()
     }
 
     getDeleteNotes(file: AllFile): AnkiConnect.AnkiConnectRequest{
@@ -367,14 +319,5 @@ export class FileManager {
 
     getChangeDecks(file: AllFile): AnkiConnect.AnkiConnectRequest{
         return file.getChangeDecks()
-    }
-    
-    getClearTags(file: AllFile): AnkiConnect.AnkiConnectRequest{
-        return file.getClearTags()
-    }    
-
-    getAddTags(file: AllFile): AnkiConnect.AnkiConnectRequest{
-        return file.getAddTags()
-    }
-    
+    }   
 }

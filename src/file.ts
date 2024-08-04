@@ -1,16 +1,15 @@
 /*Performing plugin operations on markdown file contents*/
 
 import { FROZEN_FIELDS_DICT } from './interfaces/field-interface'
-import { AnkiConnectNote, AnkiConnectNoteAndID } from './interfaces/note-interface'
+import { AnkiConnectNoteAndID } from './interfaces/note-interface'
 import { FileData } from './interfaces/settings-interface'
-import { /*Note, InlineNote,*/ RegexNote, CLOZE_ERROR, NOTE_TYPE_ERROR, TAG_SEP, ID_REGEXP_STR, TAG_REGEXP_STR } from './note'
+import { /*Note, InlineNote,*/ RegexNote, CLOZE_ERROR, ID_REGEXP_STR, TAG_REGEXP_STR } from './note'
 import { Md5 } from 'ts-md5/dist/md5';
 import * as AnkiConnect from './anki'
 import * as c from './constants'
 import { FormatConverter } from './format'
 import { CachedMetadata, HeadingCache, App, TFile } from 'obsidian'
 
-//const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
 const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
 
 function id_to_str(identifier: number, inline: boolean = false, comment: boolean = false): string {
@@ -72,27 +71,23 @@ function* findignore(pattern: RegExp, text: string, ignore_spans: Array<[number,
 
 abstract class AbstractFile {
     file_content: string
-    path: string
-    url: string
     original_file: string
+
+    path: string
+    fullPath: string
+
+    url: string
     data: FileData
     file_cache: CachedMetadata
 
     frozen_fields_dict: FROZEN_FIELDS_DICT
-    target_deck: string
+    fileDefault_target_deck: string
     global_tags: string
 
-    notes_to_add: AnkiConnectNote[]
-    id_indexes: number[]
-    notes_to_edit: AnkiConnectNoteAndID[]
-    notes_to_delete: number[]
-    all_notes_to_add: AnkiConnectNote[]
-
-    note_ids: Array<number | null>
-    card_ids: number[]
-    tags: string[]
-
-    fullPath: string
+    //notes_to_add: AnkiConnectNote[] = []
+    notes_to_edit: AnkiConnectNoteAndID[] = []
+    notes_to_delete: number[] = []
+    all_notes_to_add: AnkiConnectNoteAndID[] = []
 
     formatter: FormatConverter
 
@@ -133,14 +128,15 @@ abstract class AbstractFile {
         this.frozen_fields_dict = frozen_fields_dict
     }
 
-    setup_target_deck() {
+    setup_fileDefault_target_deck() {
+        //TOTO: Add option
         if (true) {
-            this.target_deck = this.fullPath.replaceAll("/", "::")
-            this.target_deck = this.data.template["deckName"] + "::" + this.target_deck
+            this.fileDefault_target_deck = this.fullPath.replaceAll("/", "::")
+            this.fileDefault_target_deck = this.data.template["deckName"] + "::" + this.fileDefault_target_deck
         }
         else {
             const result = this.file_content.match(this.data.DECK_REGEXP)
-            this.target_deck = result ? result[1] : this.data.template["deckName"]
+            this.fileDefault_target_deck = result ? result[1] : this.data.template["deckName"]
         }
 
     }
@@ -200,21 +196,13 @@ abstract class AbstractFile {
         this.file_content = this.file_content.replace(this.data.EMPTY_REGEXP, "")
     }
 
-    getCreateDecks(): AnkiConnect.AnkiConnectRequest {
+    getAddNotes(): AnkiConnect.AnkiConnectRequest {
         if(this.all_notes_to_add.length == 0)
             return null
-
+        
         let actions: AnkiConnect.AnkiConnectRequest[] = []
         for (let note of this.all_notes_to_add) {
-            actions.push(AnkiConnect.createDeck(note.deckName))
-        }
-        return AnkiConnect.multi(actions)
-    }
-
-    getAddNotes(): AnkiConnect.AnkiConnectRequest {
-        let actions: AnkiConnect.AnkiConnectRequest[] = []
-        for (let note of this.all_notes_to_add) {
-            actions.push(AnkiConnect.addNote(note))
+            actions.push(AnkiConnect.addNote(note.note))
         }
         return AnkiConnect.multi(actions)
     }
@@ -222,30 +210,23 @@ abstract class AbstractFile {
     getDeleteNotes(): AnkiConnect.AnkiConnectRequest {
         if(this.notes_to_delete.length == 0)
             return null
+
         return AnkiConnect.deleteNotes(this.notes_to_delete)
     }
 
-    getUpdateFields(): AnkiConnect.AnkiConnectRequest {
+    getUpdateNotes(): AnkiConnect.AnkiConnectRequest {
         if(this.notes_to_edit.length == 0)
             return null
 
         let actions: AnkiConnect.AnkiConnectRequest[] = []
         for (let parsed of this.notes_to_edit) {
             actions.push(
-                AnkiConnect.updateNoteFields(
-                    parsed.identifier, parsed.note.fields
+                AnkiConnect.updateNote(
+                    parsed.identifier, parsed.note.fields, parsed.note.tags
                 )
             )
         }
         return AnkiConnect.multi(actions)
-    }
-
-    getNoteInfo(): AnkiConnect.AnkiConnectRequest {
-        let IDs: number[] = []
-        for (let parsed of this.notes_to_edit) {
-            IDs.push(parsed.identifier)
-        }
-        return AnkiConnect.notesInfo(IDs)
     }
 
     getChangeDecks(): AnkiConnect.AnkiConnectRequest {
@@ -259,25 +240,14 @@ abstract class AbstractFile {
         return AnkiConnect.multi(requests)
     }
 
-    getClearTags(): AnkiConnect.AnkiConnectRequest {
-        if(this.notes_to_edit.length == 0)
-            return null
-        
-        let IDs: number[] = []
-        for (let parsed of this.notes_to_edit) {
-            IDs.push(parsed.identifier)
-        }
-        return AnkiConnect.removeTags(IDs, this.tags.join(" "))
-    }
-
-    getAddTags(): AnkiConnect.AnkiConnectRequest {
+    getUpdateTags(): AnkiConnect.AnkiConnectRequest {
         if(this.notes_to_edit.length == 0)
             return null
         
         let actions: AnkiConnect.AnkiConnectRequest[] = []
         for (let parsed of this.notes_to_edit) {
             actions.push(
-                AnkiConnect.addTags([parsed.identifier], parsed.note.tags.join(" ") + " " + this.global_tags)
+                AnkiConnect.updateNoteTags(parsed.identifier, parsed.note.tags.join(" ") + " " + this.global_tags)
             )
         }
         return AnkiConnect.multi(actions)
@@ -288,10 +258,11 @@ abstract class AbstractFile {
 export class AllFile extends AbstractFile {
     ignore_spans: [number, number][]
     custom_regexps: Record<string, string>
-    inline_notes_to_add: AnkiConnectNote[]
-    inline_id_indexes: number[]
-    regex_notes_to_add: AnkiConnectNote[]
-    regex_id_indexes: number[]
+    //inline_notes_to_add: AnkiConnectNote[]
+    //inline_id_indexes: number[]
+    regex_notes_to_add: AnkiConnectNoteAndID[] = []
+    //regex_id_indexes: number[]
+    
     app: App
     obsidian_file: TFile
 
@@ -323,17 +294,9 @@ export class AllFile extends AbstractFile {
 
     setupScan() {
         this.setup_frozen_fields_dict()
-        this.setup_target_deck()
+        this.setup_fileDefault_target_deck()
         this.setup_global_tags()
         this.add_spans_to_ignore()
-        this.notes_to_add = []
-        this.inline_notes_to_add = []
-        this.regex_notes_to_add = []
-        this.id_indexes = []
-        this.inline_id_indexes = []
-        this.regex_id_indexes = []
-        this.notes_to_edit = []
-        this.notes_to_delete = []
     }
 
     /*scanNotes() {
@@ -423,7 +386,7 @@ export class AllFile extends AbstractFile {
                     this.ignore_spans.push([match.index, match.index + match[0].length])
                     let matchObj = this.formatMatchDict(match, search_id, search_tags)
 
-                    let deck = matchObj["link"] ? this.getDeckFromLink(matchObj["link"]) : this.target_deck
+                    let deck = matchObj["link"] ? this.getDeckFromLink(matchObj["link"]) : this.fileDefault_target_deck
                     const parsed: AnkiConnectNoteAndID = await new RegexNote(
                         matchObj, note_type, this.data.fields_dict,
                         search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze, this.formatter
@@ -451,9 +414,10 @@ export class AllFile extends AbstractFile {
                             this.ignore_spans.pop()
                             continue
                         }
-                        parsed.note.tags.push(...this.global_tags.split(TAG_SEP))
-                        this.regex_notes_to_add.push(parsed.note)
-                        this.regex_id_indexes.push(match.index + match[0].length)
+                        //parsed.note.tags.push(...this.global_tags.split(TAG_SEP))
+                        parsed.identifierPosition = match.index + match[0].length
+                        this.regex_notes_to_add.push(parsed)
+                        //this.regex_id_indexes.push(match.index + match[0].length)
                     }
                 }
             }
@@ -470,19 +434,15 @@ export class AllFile extends AbstractFile {
                 await this.search(note_type, regexp_str)
             }
         }
-        this.all_notes_to_add = this.notes_to_add.concat(this.inline_notes_to_add).concat(this.regex_notes_to_add)
+        this.all_notes_to_add = /*this.notes_to_add.concat(this.inline_notes_to_add).concat*/(this.regex_notes_to_add)
         this.scanDeletions()
         //look if anything was found in the file; return false if not
-        return (this.inline_notes_to_add.length + this.notes_to_add.length + this.notes_to_delete.length + this.notes_to_edit.length + this.regex_notes_to_add.length) == 0 ? false : true
-    }
-
-    fix_newline_ids() {
-        this.file_content = this.file_content.replace(double_regexp, "$1")
+        return (/*this.inline_notes_to_add.length + this.notes_to_add.length + */this.notes_to_delete.length + this.notes_to_edit.length + this.all_notes_to_add.length) == 0 ? false : true
     }
 
     writeIDs() {
         let normal_inserts: [number, string][] = []
-        this.id_indexes.forEach(
+        /*this.id_indexes.forEach(
             (id_position: number, index: number) => {
                 const identifier: number | null = this.note_ids[index]
                 if (identifier) {
@@ -491,6 +451,7 @@ export class AllFile extends AbstractFile {
             }
         )
         let inline_inserts: [number, string][] = []
+        
         this.inline_id_indexes.forEach(
             (id_position: number, index: number) => {
                 const identifier: number | null = this.note_ids[index + this.notes_to_add.length] //Since regular then inline
@@ -498,18 +459,15 @@ export class AllFile extends AbstractFile {
                     inline_inserts.push([id_position, id_to_str(identifier, true, this.data.comment)])
                 }
             }
-        )
+        )*/
         let regex_inserts: [number, string][] = []
-        this.regex_id_indexes.forEach(
-            (id_position: number, index: number) => {
-                const identifier: number | null = this.note_ids[index + this.notes_to_add.length + this.inline_notes_to_add.length] // Since regular then inline then regex
-                if (identifier) {
-                    regex_inserts.push([id_position, "\n" + "\n" + id_to_str(identifier, false, this.data.comment)])
-                }
-            }
-        )
-        this.file_content = string_insert(this.file_content, normal_inserts.concat(inline_inserts).concat(regex_inserts))
-        this.fix_newline_ids()
+        
+        for (let note of this.regex_notes_to_add){
+            regex_inserts.push ([note.identifierPosition, "\n" + "\n" + id_to_str(note.identifier, false, this.data.comment)])
+
+        }
+
+        this.file_content = string_insert(this.file_content, regex_inserts)
     }
 
     getDeckFromLink(link: string) {

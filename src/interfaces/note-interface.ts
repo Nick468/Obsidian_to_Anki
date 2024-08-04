@@ -12,4 +12,5 @@ export interface AnkiConnectNote {
 export interface AnkiConnectNoteAndID {
 	note: AnkiConnectNote,
 	identifier: number | null
+	identifierPosition?: number
 }

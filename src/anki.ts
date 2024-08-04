@@ -69,29 +69,18 @@ export function addNote(note: AnkiConnectNote): AnkiConnectRequest {
 	return request('addNote', {note: note})
 }
 
-export function createDeck(deck: string): AnkiConnectRequest {
-	return request('createDeck', {deck: deck})
-}
-
 export function deleteNotes(note_ids: number[]): AnkiConnectRequest {
 	return request('deleteNotes', {notes: note_ids})
 }
 
-export function updateNoteFields(id: number, fields: Record<string, string>): AnkiConnectRequest {
+export function updateNote(id: number, fields: Record<string, string>, tags: string[]): AnkiConnectRequest {
 	return request(
-		'updateNoteFields', {
+		'updateNote', {
 			note: {
 				id: id,
-				fields: fields
+				fields: fields,
+				tags: tags
 			}
-		}
-	)
-}
-
-export function notesInfo(note_ids: number[]): AnkiConnectRequest {
-	return request(
-		'notesInfo', {
-			notes: note_ids
 		}
 	)
 }
@@ -105,26 +94,13 @@ export function changeDeck(card_ids: number[], deck: string): AnkiConnectRequest
 	)
 }
 
-export function removeTags(note_ids: number[], tags: string): AnkiConnectRequest {
+export function updateNoteTags(note_id: number, tags: string): AnkiConnectRequest {
 	return request(
-		'removeTags', {
-			notes: note_ids,
+		`updateNoteTags`, {
+			notes: note_id,
 			tags: tags
 		}
 	)
-}
-
-export function addTags(note_ids: number[], tags: string): AnkiConnectRequest {
-	return request(
-		'addTags', {
-			notes: note_ids,
-			tags: tags
-		}
-	)
-}
-
-export function getTags(): AnkiConnectRequest {
-	return request('getTags')
 }
 
 export function storeMediaFile(filename: string, data: string): AnkiConnectRequest {

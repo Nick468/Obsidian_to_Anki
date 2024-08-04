@@ -281,6 +281,9 @@ export class RegexNote {
 	async getFields(): Promise<Record<string, string>> {
 		let fields: Record<string, string> = {}
         for (let field of this.field_names) {
+            //TODO: Stop stupid hardcoding
+            if(field === "Extra")
+                continue
             fields[field] = ""
         }
 
