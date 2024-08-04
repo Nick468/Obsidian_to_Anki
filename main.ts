@@ -198,7 +198,7 @@ export default class MyPlugin extends Plugin {
 			scanDir = scanDirOverwrite;
 		}
 		
-		let manager = null;
+		let manager: FileManager = null;
 
 		if (scanDir !== null) {
 			if (scanDir instanceof TFolder) {
