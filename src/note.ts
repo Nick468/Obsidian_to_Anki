@@ -7,6 +7,9 @@ import { FormatConverter } from './format'
 import { AnkiConnectNote, AnkiConnectNoteAndID } from './interfaces/note-interface'
 import { FIELDS_DICT, FROZEN_FIELDS_DICT } from './interfaces/field-interface'
 import { FileData } from './interfaces/settings-interface'
+import { App } from 'obsidian'
+import { link } from 'fs'
+import multimatch from 'multimatch'
 
 const TAG_PREFIX:string = "Tags: "
 export const TAG_SEP:string = " "
@@ -15,8 +18,6 @@ export const TAG_REGEXP_STR: string = String.raw`(Tags: .*)`
 const OBS_TAG_REGEXP: RegExp = /(?:\s|>)#(\w+)/g
 
 const ANKI_CLOZE_REGEXP: RegExp = /{{c\d+::[\s\S]+?}}/
-export const CLOZE_ERROR: number = 42
-export const NOTE_TYPE_ERROR: number = 69
 
 function has_clozes(text: string): boolean {
 	/*Checks whether text actually has cloze deletions.*/
@@ -36,97 +37,102 @@ function note_has_clozes(note: AnkiConnectNote): boolean {
 abstract class AbstractNote {
     text: string
     split_text: string[]
-    current_field_num: number
-    delete: boolean
-    identifier: number | null
-    tags: string[]
-    note_type: string
     field_names: string[]
     current_field: string
-    ID_REGEXP: RegExp = /(?:<!--)?ID: (\d+)/
+    ID_REGEXP: RegExp = /<!--ID:\s?(\d{13})\s?(?:\[\[([^|#]*).*\]\]\s*)?-->/
+    
+    app: App    
+    fields_dict: FIELDS_DICT
+    frozen_fields_dict: FROZEN_FIELDS_DICT
+    data: FileData
     formatter: FormatConverter
-    curly_cloze: boolean
-	highlights_to_cloze: boolean
-    custom_cloze: boolean
-	no_note_type: boolean
 
-    constructor(note_text: string, fields_dict: FIELDS_DICT, curly_cloze: boolean, highlights_to_cloze: boolean, custom_cloze: boolean, formatter: FormatConverter) {
-        this.text = note_text.trim()
-        this.current_field_num = 0
-        this.delete = false
-		this.no_note_type = false
-        this.split_text = this.getSplitText()
-        this.identifier = this.getIdentifier()
-        this.tags = this.getTags()
-        this.note_type = this.getNoteType()
-		if (!(fields_dict.hasOwnProperty(this.note_type))) {
-			this.no_note_type = true
-			return
-		}
-        this.field_names = fields_dict[this.note_type]
-        this.current_field = this.field_names[0]
+    constructor(fields_dict: FIELDS_DICT, frozen_fields_dict: FROZEN_FIELDS_DICT, formatter: FormatConverter, data: FileData, app:App) {
+        this.fields_dict = fields_dict
+        this.frozen_fields_dict = frozen_fields_dict
+        this.data = data
         this.formatter = formatter
-        this.curly_cloze = curly_cloze
-		this.highlights_to_cloze = highlights_to_cloze
-        this.custom_cloze = custom_cloze
+        this.app = app
     }
 
     abstract getSplitText(): string[]
 
-    abstract getIdentifier(): number | null
+    abstract getIdentifierAndDeckOverwrite(): [number | null, string]
 
     abstract getTags(): string[]
 
     abstract getNoteType(): string
 
-    abstract getFields(): Record<string, string>
+    abstract getFields(): Promise<Record<string, string>>
 
-    parse(deck:string, url:string, frozen_fields_dict: FROZEN_FIELDS_DICT, data: FileData, context:string): AnkiConnectNoteAndID {
-        let template = JSON.parse(JSON.stringify(data.template))
-		template["modelName"] = this.note_type
-		if (this.no_note_type) {
-			return {note: template, identifier: NOTE_TYPE_ERROR}
+    async parse(note_text: string, url:string, context:string, filePath: string): Promise<AnkiConnectNoteAndID> {
+        this.text = note_text.trim()
+        this.split_text = this.getSplitText();
+        
+        let note_type:string = this.getNoteType()
+		if (!(this.fields_dict.hasOwnProperty(note_type))) {
+			throw new Error("Did not recognise note type " + note_type + " in file " + filePath)
 		}
-        template["fields"] = this.getFields()
-		const file_link_fields = data.file_link_fields
-        if (url) {
-            this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type])
+
+        this.field_names = this.fields_dict[note_type]
+        this.current_field = this.field_names[0]
+
+        let newNote = JSON.parse(JSON.stringify(this.data.template))
+		newNote.modelName = note_type
+
+        let [identifier, deckOverwrite]: [number|null, string] = this.getIdentifierAndDeckOverwrite()
+        newNote.deckName = deckOverwrite ? deckOverwrite : this.data.template.deckName
+                
+        newNote.fields = await this.getFields()
+
+        // add url
+        if (url.length > 0) {
+            this.formatter.format_note_with_url(newNote, url, this.data.file_link_fields[note_type])
         }
-        if (Object.keys(frozen_fields_dict).length) {
-            this.formatter.format_note_with_frozen_fields(template, frozen_fields_dict)
+        
+        // frozen_fields ???
+        if (Object.keys(this.frozen_fields_dict).length) {
+            this.formatter.format_note_with_frozen_fields(newNote, this.frozen_fields_dict)
         }
-		if (context) {
-			const context_field = data.context_fields[this.note_type]
-			template["fields"][context_field] += context
+		
+        // add context field
+        if (context.length > 0) {
+			const context_field = this.data.context_fields[note_type]
+			newNote.fields[context_field] += context
 		}
-		if (data.add_obs_tags) {
-			for (let key in template["fields"]) {
-				for (let match of template["fields"][key].matchAll(OBS_TAG_REGEXP)) {
-					this.tags.push(match[1])
+		
+        // add tags
+        let tags:string[] = this.getTags()
+        if (this.data.add_obs_tags) {
+			for (let key in newNote.fields) {
+				for (let match of newNote.fields[key].matchAll(OBS_TAG_REGEXP)) {
+					tags.push(match[1])
 				}
-				template["fields"][key] = template["fields"][key].replace(OBS_TAG_REGEXP, "")
+				newNote.fields[key] = newNote.fields[key].replace(OBS_TAG_REGEXP, "")
 	        }
 		}
-        template["tags"].push(...this.tags)
-        template["deckName"] = deck
-        return {note: template, identifier: this.identifier}
+        newNote.tags.push(...tags)
+
+        return {note: newNote, identifier: identifier}
     }
 
 }
 
-/*
+
 export class Note extends AbstractNote {
 
     getSplitText(): string[] {
         return this.text.split("\n")
     }
 
-    getIdentifier(): number | null {
-        if (this.ID_REGEXP.test(this.split_text[this.split_text.length-1])) {
-            return parseInt(this.ID_REGEXP.exec(this.split_text.pop())[1])
-        } else {
-            return null
-        }
+    getIdentifierAndDeckOverwrite(): [number | null, string] {
+        const match = this.split_text[this.split_text.length-1].match(this.ID_REGEXP)
+        if(match == null)    
+            return [null, null]
+
+        this.split_text.pop()
+        let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
+        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.app, this.data)]
     }
 
     getTags(): string[] {
@@ -144,7 +150,7 @@ export class Note extends AbstractNote {
     fieldFromLine(line: string): [string, string] {
         /*From a given line, determine the next field to add text into.
 
-        Then, return the stripped line, and the field.*
+        Then, return the stripped line, and the field.*/
         for (let field of this.field_names) {
             if (line.startsWith(field + ":")) {
                 return [line.slice((field + ":").length), field]
@@ -153,7 +159,7 @@ export class Note extends AbstractNote {
         return [line,this.current_field]
     }
 
-    getFields(): Record<string, string> {
+    async getFields(): Promise<Record<string, string>> {
         let fields: Record<string, string> = {}
         for (let field of this.field_names) {
             fields[field] = ""
@@ -163,38 +169,29 @@ export class Note extends AbstractNote {
             fields[this.current_field] += line + "\n"
         }
         for (let key in fields) {
-            fields[key] = this.formatter.format(
-                fields[key].trim(),
-                this.note_type.includes("Cloze") && this.curly_cloze,
-				this.highlights_to_cloze,
-                this.custom_cloze
-            ).trim()
+            fields[key] = (await this.formatter.format(fields[key].trim())).trim()
         }
         return fields
     }
 
 }
-*/
 
-/*
 export class InlineNote extends AbstractNote {
 
     static TAG_REGEXP: RegExp = /Tags: (.*)/;
-    static ID_REGEXP: RegExp = /(?:<!--)?ID: (\d+)/;
     static TYPE_REGEXP: RegExp = /\[(.*?)\]/;
 
     getSplitText(): string[] {
         return this.text.split(" ")
     }
 
-    getIdentifier(): number | null {
-        const result = this.text.match(InlineNote.ID_REGEXP)
-        if (result) {
-            this.text = this.text.slice(0,result.index).trim()
-            return parseInt(result[1])
-        } else {
-            return null
-        }
+    getIdentifierAndDeckOverwrite(): [number | null, string] {
+        const match = this.text.match(this.ID_REGEXP)
+        if(!match)
+            return [null, null]
+
+        let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
+        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.app, this.data)]
     }
 
     getTags(): string[] {
@@ -213,7 +210,7 @@ export class InlineNote extends AbstractNote {
         return result[1]
     }
 
-    getFields(): Record<string, string> {
+    async getFields(): Promise <Record<string, string>> {
         let fields: Record<string, string> = {}
         for (let field of this.field_names) {
             fields[field] = ""
@@ -228,43 +225,49 @@ export class InlineNote extends AbstractNote {
             fields[this.current_field] += word + " "
         }
         for (let key in fields) {
-            fields[key] = this.formatter.format(
-                fields[key].trim(),
-                this.note_type.includes("Cloze") && this.curly_cloze,
-				this.highlights_to_cloze,
-                this.custom_cloze
-            ).trim()
+            fields[key] = (await this.formatter.format(fields[key].trim())).trim()
         }
         return fields
     }
 
 
 }
-*/
 
 export class RegexNote {
+    app: App
+
+    field_names: string[]
+
+
 
 	match: Record<string, string>
 	note_type: string
 	groups: Array<string>
-	identifier: number | null
-	tags: string[]
-    field_names: string[]
-	curly_cloze: boolean
-	highlights_to_cloze: boolean
-    custom_cloze: boolean
-	formatter: FormatConverter
+	//identifier: number | null
+	//tags: string[]
+	
+
+    private frozen_fields_dict: FROZEN_FIELDS_DICT
+    protected data: FileData
+    protected formatter: FormatConverter
 
 
-	constructor(
+    constructor(frozen_fields_dict: FROZEN_FIELDS_DICT, formatter: FormatConverter, data: FileData, note_type: string, app: App) {
+        this.field_names = data.fields_dict[note_type]
+        this.frozen_fields_dict = frozen_fields_dict
+        this.data = data
+        this.formatter = formatter
+        this.note_type = note_type
+        this.app = app
+    }
+
+
+	/*constructor(
 			match: Record<string, string>,
 			note_type: string,
 			fields_dict: FIELDS_DICT,
 			tags: boolean,
 			id: boolean,
-			curly_cloze: boolean,
-			highlights_to_cloze: boolean,
-            custom_cloze: boolean,
 			formatter: FormatConverter
         ) {
 		this.match = match
@@ -272,18 +275,17 @@ export class RegexNote {
 		this.identifier = id ? parseInt(match["id"]) : null
 		this.tags = tags ? match["tags"].slice(TAG_PREFIX.length).split(TAG_SEP) : []
 		this.field_names = fields_dict[note_type]
-		this.curly_cloze = curly_cloze
 		this.formatter = formatter
-		this.highlights_to_cloze = highlights_to_cloze
-        this.custom_cloze = custom_cloze
-	}
+	}*/
 
 	async getFields(): Promise<Record<string, string>> {
 		let fields: Record<string, string> = {}
         for (let field of this.field_names) {
             //TODO: Stop stupid hardcoding
-            if(field === "Extra")
+            
+            if(field === this.data.extra_fields[this.note_type])
                 continue
+            
             fields[field] = ""
         }
 
@@ -299,35 +301,65 @@ export class RegexNote {
         return fields
 	}
 
-	async parse(deck: string, url: string = "", frozen_fields_dict: FROZEN_FIELDS_DICT, data: FileData, context: string): Promise<AnkiConnectNoteAndID> {
-		let template = JSON.parse(JSON.stringify(data.template))
-        template.deckName = deck
-		template["modelName"] = this.note_type
-		template["fields"] = await this.getFields()
-		const file_link_fields = data.file_link_fields
+	async parse(match: Record<string, string>, url: string = "", context: string, filePath: string): Promise<AnkiConnectNoteAndID> {
+		this.match = match
+        
+        let newNote = JSON.parse(JSON.stringify(this.data.template))
+        
+        newNote.modelName = this.note_type
+        let identifier: number|null = match.id ? parseInt(match.id) : null
+		let tags: string[] = match.tags ? match.tags.slice(TAG_PREFIX.length).split(TAG_SEP) : []
+
+
+        if(match.link){
+            let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
+            newNote.deckName = linkToDeck.linkToDeckResolver(match.link, this.app, this.data)
+            }
+        else
+            newNote.deckName = this.data.template.deckName
+		  
+		newNote.fields = await this.getFields()
+		const file_link_fields = this.data.file_link_fields
 		if (url) {
-            this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type], this.match["title"])
+            this.formatter.format_note_with_url(newNote, url, file_link_fields[this.note_type], match.title)
         }
-        if (Object.keys(frozen_fields_dict).length) {
-            this.formatter.format_note_with_frozen_fields(template, frozen_fields_dict)
+        if (Object.keys(this.frozen_fields_dict).length) {
+            this.formatter.format_note_with_frozen_fields(newNote, this.frozen_fields_dict)
         }
 		if (context) {
-			const context_field = data.context_fields[this.note_type]
-			template["fields"][context_field] += context
+			const context_field = this.data.context_fields[this.note_type]
+			newNote.fields[context_field] += context
 		}
-		if (this.note_type.includes("Cloze") && !(note_has_clozes(template))) {
-			this.identifier = CLOZE_ERROR //An error code that says "don't add this note!"
+		if (this.note_type.includes("Cloze") && !(note_has_clozes(newNote))) {
+            console.warn("Close error occured in file " + filePath)
+            return null // An error code that says "don't add this note!"
 		}
-		if (data.add_obs_tags) {
-			for (let key in template["fields"]) {
-				for (let match of template["fields"][key].matchAll(OBS_TAG_REGEXP)) {
-					this.tags.push(match[1])
+		if (this.data.add_obs_tags) {
+			for (let key in newNote.fields) {
+				for (let match of newNote.fields[key].matchAll(OBS_TAG_REGEXP)) {
+					tags.push(match[1])
 				}
-				template["fields"][key] = template["fields"][key].replace(OBS_TAG_REGEXP, "")
+				newNote.fields[key] = newNote.fields[key].replace(OBS_TAG_REGEXP, "")
 	        }
 		}
-		template["tags"].push(...this.tags)
-        template["deckName"] = deck
-		return {note: template, identifier: this.identifier}
+		newNote.tags.push(...tags)
+		return {note: newNote, identifier: identifier}
 	}
+}
+
+class linkToDeckResolver{
+    constructor() {}
+
+    linkToDeckResolver(link: string, app: App, data: FileData): string {
+        if(!link)
+            return
+        let tempFile = app.metadataCache.getFirstLinkpathDest(link, "")
+        let deck = tempFile.path.replaceAll("/", "::")
+        const index = deck.lastIndexOf('::');
+        if (index != -1) {
+            deck = deck.substring(0, index);
+        }
+        deck = data.defaultDeck + "::" + deck
+        return deck
+    }   
 }

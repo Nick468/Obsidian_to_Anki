@@ -23,14 +23,14 @@ export class SettingsTab extends PluginSettingTab {
 
 	setup_custom_regexp(note_type: string, row_cells: HTMLCollection) {
 		const plugin = (this as any).plugin
-		let regexp_section = plugin.settings["CUSTOM_REGEXPS"]
 		let custom_regexp = new Setting(row_cells[1] as HTMLElement)
 			.addText(
 					text => text.setValue(
-					regexp_section.hasOwnProperty(note_type) ? regexp_section[note_type] : ""
+					plugin.settings.noteTypes.hasOwnProperty(note_type) ? plugin.settings.noteTypes[note_type].regexp_section : ""
 					)
 					.onChange((value) => {
-						plugin.settings["CUSTOM_REGEXPS"][note_type] = value
+						plugin.settings.noteTypes
+						plugin.settings.noteTypes[note_type].custom_regexp = value
 						plugin.saveAllData()
 					})
 			)
@@ -406,6 +406,7 @@ export class SettingsTab extends PluginSettingTab {
 				}
 			)
 	}
+
 	setup_ignore_files() {
 		let { containerEl } = this;
 		const plugin = (this as any).plugin

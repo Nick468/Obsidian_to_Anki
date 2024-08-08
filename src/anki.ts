@@ -65,6 +65,14 @@ export function multi(actions: AnkiConnectRequest[]): AnkiConnectRequest {
 	return request('multi', {actions: actions})
 }
 
+export function createDeck(deck: string): AnkiConnectRequest {
+	return request(
+		'createDeck', {
+			deck: deck,
+		}
+	)
+}
+
 export function addNote(note: AnkiConnectNote): AnkiConnectRequest {
 	return request('addNote', {note: note})
 }
@@ -90,24 +98,6 @@ export function changeDeck(card_ids: number[], deck: string): AnkiConnectRequest
 		'changeDeck', {
 			cards: card_ids,
 			deck: deck
-		}
-	)
-}
-
-export function updateNoteTags(note_id: number, tags: string): AnkiConnectRequest {
-	return request(
-		`updateNoteTags`, {
-			notes: note_id,
-			tags: tags
-		}
-	)
-}
-
-export function storeMediaFile(filename: string, data: string): AnkiConnectRequest {
-	return request(
-		'storeMediaFile', {
-			filename: filename,
-			data: data
 		}
 	)
 }

@@ -1,9 +1,9 @@
 import { Notice, Plugin, addIcon, TFile, TFolder, TAbstractFile} from 'obsidian'
 import * as AnkiConnect from './src/anki'
-import { PluginSettings, ParsedSettings } from './src/interfaces/settings-interface'
+import { PluginSettings, fileManagerData, FileData } from './src/interfaces/settings-interface'
 import { DEFAULT_IGNORED_FILE_GLOBS, SettingsTab } from './src/settings'
 import { ANKI_ICON } from './src/constants'
-import { settingToData } from './src/setting-to-data'
+import { settingstoFileManagerData, settingToFileData } from './src/setting-to-data'
 import { FileManager } from './src/files-manager'
 
 export default class MyPlugin extends Plugin {
@@ -159,8 +159,6 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
-
-
 	async deleteIDs(file:TFile){
 		let content = await this.app.vault.read(file)
 		const REPL_ID_REGEXP: RegExp = /^(<!--ID:\s\d{13}-->)/gm
@@ -179,7 +177,10 @@ export default class MyPlugin extends Plugin {
 			return;
 		}
 		new Notice("Successfully connected to Anki! This could take a few minutes - please don't close Anki until the plugin is finished");
-		const data: ParsedSettings = await settingToData(this.app, this.settings, this.fields_dict);
+		const fileData: FileData = await settingToFileData(this.app, this.settings, this.fields_dict);
+		const fileManagerData: fileManagerData = await settingstoFileManagerData(this.settings)
+		
+
 		let scanDir;
 		if(scanDirOverwrite == null){
 			// scan of the Scan Directory (Settings)
@@ -194,11 +195,11 @@ export default class MyPlugin extends Plugin {
 				return;
 			}
 		}else{
-			// coming from right click
+			// request initiated from file-menu
 			scanDir = scanDirOverwrite;
 		}
 		
-		let manager: FileManager = null;
+		let manager: FileManager;
 
 		if (scanDir !== null) {
 			if (scanDir instanceof TFolder) {
@@ -206,12 +207,10 @@ export default class MyPlugin extends Plugin {
 			} else {
 				console.info("Only scanning file: " + scanDir.name);
 			}
-			manager = new FileManager(this.app, data, scanDir, this.file_hashes, this.added_media);
+			manager = new FileManager(this.app, fileData, fileManagerData, scanDir, this.file_hashes, this.added_media);
 		} else {
 			//shouldt be empty, but I am leaving this here for possible fuck ups
-			//manager = new FileManager(this.app, data, this.app.vault.getMarkdownFiles(), this.file_hashes, this.added_media);
-			new Notice("Error: Dafuq happend?");
-			return;
+			throw new Error('scanDir is empty');
 		}
 		
 		await manager.initialiseFiles()
@@ -293,7 +292,6 @@ export default class MyPlugin extends Plugin {
 			 }
 		})
 	}
-
 
 	async onunload() {
 		console.log("Saving settings for Obsidian_to_Anki...")

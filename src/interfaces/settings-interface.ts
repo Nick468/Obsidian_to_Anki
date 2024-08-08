@@ -1,5 +1,13 @@
+import { App } from 'obsidian'
 import { FIELDS_DICT } from './field-interface'
 import { AnkiConnectNote } from './note-interface'
+
+export interface noteTypeSettings{
+	custom_regexp: string
+	file_link_field: string
+	context_field: string
+	extra_field: string
+}
 
 export interface PluginSettings {
 	CUSTOM_REGEXPS: Record<string, string>,
@@ -35,13 +43,19 @@ export interface PluginSettings {
 
 export interface FileData {
 	//All the data that a file would need.
+	vault_name: string
+	folder_decks: Record<string, string>
+
+	mirrorObsidianFolders: boolean
+	defaultDeck: string
+
 	fields_dict: FIELDS_DICT
 	custom_regexps: Record<string, string>
 	file_link_fields: Record<string, string>
 	context_fields: Record<string, string>
+	extra_fields: Record<string, string>
 	template: AnkiConnectNote
 	EXISTING_IDS: number[]
-	vault_name: string
 
 	FROZEN_REGEXP: RegExp
 	DECK_REGEXP: RegExp
@@ -56,11 +70,11 @@ export interface FileData {
 	comment: boolean
 	add_context: boolean
 	add_obs_tags: boolean
+	add_file_link: boolean
 }
 
-export interface ParsedSettings extends FileData {
-	add_file_link: boolean
-	folder_decks: Record<string, string>
+export interface fileManagerData {
+	
 	folder_tags: Record<string, string>
 	ignored_file_globs: string[]
 }

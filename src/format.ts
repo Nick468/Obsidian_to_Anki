@@ -2,16 +2,17 @@ import { AnkiConnectNote } from './interfaces/note-interface'
 import { basename, extname } from 'path'
 import { CachedMetadata, MarkdownRenderer, Component, App } from 'obsidian'
 import * as c from './constants'
+import { FileData } from './interfaces/settings-interface'
 
 const ANKI_MATH_REGEXP:RegExp = /(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))/g
-const HIGHLIGHT_REGEXP:RegExp = /==(.*?)==/g
+const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
 
 const MATH_REPLACE:string = "OBSTOANKIMATH"
 const MERMAID_CODE_REPLACE = "OBSTOANKIMERMAIDDISPLAY"
 
+const HIGHLIGHT_REGEXP:RegExp = /==(.*?)==/g
 const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(?:(?<!})}(?!}))/g
 
-const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
 
 const IMAGE_EXTS: string[] = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".tiff", ".webp"]
 const AUDIO_EXTS: string[] = [".wav", ".m4a", ".flac", ".mp3", ".wma", ".aac", ".webm"]
@@ -38,15 +39,16 @@ export class FormatConverter {
 	highlights_to_cloze:  boolean
 	custom_cloze: boolean
 
-	constructor(file_cache: CachedMetadata, vault_name: string, app: App, path: string, cloze: boolean, highlights_to_cloze: boolean, custom_cloze:boolean) {
-		this.vault_name = vault_name
+	constructor(file_cache: CachedMetadata, data:FileData, path: string, app:App) {
+		this.vault_name = data.vault_name
 		this.file_cache = file_cache
 		this.detectedMedia = new Set()
 		this.app = app
 		this.path = path
-		this.cloze = cloze
-		this.highlights_to_cloze = highlights_to_cloze
-		this.custom_cloze = custom_cloze
+
+		this.cloze = data.curly_cloze
+		this.highlights_to_cloze = data.highlights_to_cloze
+		this.custom_cloze = data.custom_cloze
 	}
 
 	getUrlFromLink(link: string): string {
@@ -188,6 +190,7 @@ export class FormatConverter {
 	}
 
 	highlight_embed(note_text: string): string{
+		//TODO: Add colour option
 		return note_text.replaceAll(	`<div class="markdown-preview-view markdown-rendered show-indentation-guide">`, 
 									`<div class="markdown-preview-view markdown-rendered show-indentation-guide" style="background-color:rgba(245, 248, 249, 0.85);">`)
 	}

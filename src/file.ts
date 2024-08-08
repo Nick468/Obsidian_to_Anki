@@ -3,14 +3,15 @@
 import { FROZEN_FIELDS_DICT } from './interfaces/field-interface'
 import { AnkiConnectNoteAndID } from './interfaces/note-interface'
 import { FileData } from './interfaces/settings-interface'
-import { /*Note, InlineNote,*/ RegexNote, CLOZE_ERROR, ID_REGEXP_STR, TAG_REGEXP_STR } from './note'
+import { Note, InlineNote, RegexNote,  ID_REGEXP_STR, TAG_REGEXP_STR } from './note'
 import { Md5 } from 'ts-md5/dist/md5';
 import * as AnkiConnect from './anki'
 import * as c from './constants'
 import { FormatConverter } from './format'
 import { CachedMetadata, HeadingCache, App, TFile } from 'obsidian'
 
-const double_regexp: RegExp = /(?:\r\n|\r|\n)((?:\r\n|\r|\n)(?:\r\n|\r|\n)(?:<!--)?ID: \d+)/g
+//const double_regexp: RegExp = /(?:\r\n|\r|\n)+((?:\r\n|\r|\n){2}(?:<!--)?ID:\d+)/g
+const double_regexp: RegExp = /(?:\n)+(\n{2}<!--ID:\d+.*)/g
 
 function id_to_str(identifier: number, inline: boolean = false, comment: boolean = false): string {
     let result = "ID:" + identifier.toString()
@@ -69,9 +70,13 @@ function* findignore(pattern: RegExp, text: string, ignore_spans: Array<[number,
     }
 }
 
-abstract class AbstractFile {
+export class AllFile {
+    app: App
+
+    obsidian_file: TFile
+    
     file_content: string
-    original_file: string
+    original_file_content: string
 
     path: string
     fullPath: string
@@ -81,25 +86,43 @@ abstract class AbstractFile {
     file_cache: CachedMetadata
 
     frozen_fields_dict: FROZEN_FIELDS_DICT
-    fileDefault_target_deck: string
-    global_tags: string
 
-    //notes_to_add: AnkiConnectNote[] = []
+    regular_notes_to_add: AnkiConnectNoteAndID[] = []
+    inline_notes_to_add: AnkiConnectNoteAndID[] = []
+    regex_notes_to_add: AnkiConnectNoteAndID[] = []
+    all_notes_to_add: AnkiConnectNoteAndID[] = []
+    
     notes_to_edit: AnkiConnectNoteAndID[] = []
     notes_to_delete: number[] = []
-    all_notes_to_add: AnkiConnectNoteAndID[] = []
-
+    
     formatter: FormatConverter
 
-    constructor(file_content: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
+    ignore_spans: [number, number][]
+    custom_regexps: Record<string, string>
+    
+
+    constructor(file: TFile, file_content: string, file_cache: CachedMetadata, data: FileData, app: App) {    
+        this.obsidian_file = file
+        this.custom_regexps = data.custom_regexps
+        this.app = app
+        this.file_cache = file_cache
         this.data = data
         this.file_content = file_content
-        this.original_file = this.file_content
-        this.path = path
-        this.url = url
-        this.file_cache = file_cache
-        this.fullPath = fullPath
-        this.formatter = new FormatConverter(file_cache, this.data.vault_name, app, this.path, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze)
+        this.original_file_content = file_content
+        
+        this.path = file.path
+
+        this.url = data.add_file_link ? "obsidian://open?vault=" + encodeURIComponent(data.vault_name) + String.raw`&file=` + encodeURIComponent(file.path) : ""
+
+        this.setup_frozen_fields_dict()
+        this.add_spans_to_ignore()
+
+        this.setup_fileDefault_target_deck()
+        this.setup_fileDefault_tags()
+
+        
+        this.formatter = new FormatConverter(file_cache, data, this.path, app)
+        
     }
 
     setup_frozen_fields_dict() {
@@ -129,28 +152,35 @@ abstract class AbstractFile {
     }
 
     setup_fileDefault_target_deck() {
-        //TOTO: Add option
-        if (true) {
-            this.fileDefault_target_deck = this.fullPath.replaceAll("/", "::")
-            this.fileDefault_target_deck = this.data.template["deckName"] + "::" + this.fileDefault_target_deck
-        }
-        else {
-            const result = this.file_content.match(this.data.DECK_REGEXP)
-            this.fileDefault_target_deck = result ? result[1] : this.data.template["deckName"]
+        // this.data.template.deckName contains the global target deck set in the settings
+        
+        // overwrite default deck by appending the obsidian file path
+        if (this.data.mirrorObsidianFolders) {
+            let pathWithoutExtension: string = this.path.slice(0, -3)
+            let obsidianFolderDeck: string  = pathWithoutExtension.replaceAll("/", "::")
+            
+            if(this.data.defaultDeck.length == 0)
+                this.data.template.deckName = obsidianFolderDeck
+            else
+                this.data.template.deckName = this.data.defaultDeck + "::" + obsidianFolderDeck
         }
 
+        // overwrtie default deck by settings -> folder settings
+        if(this.data.folder_decks[this.path]) //TODO: Check
+            this.data.template.deckName = this.data.folder_decks[this.path]
+
+        // in-file overwrite by TARGET DECK keyword
+        let match = this.file_content.match(this.data.DECK_REGEXP)
+        if(match)
+            this.data.template.deckName = match[1] //TODO: Check if this works
+        
     }
 
-    setup_global_tags() {
+    setup_fileDefault_tags() {
         const result = this.file_content.match(this.data.TAG_REGEXP)
-        this.global_tags = result ? result[1] : ""
+        if(result)
+            this.data.template.tags.push(...result[1].split(" ")) 
     }
-
-    getHash(): string {
-        return Md5.hashStr(this.file_content) as string
-    }
-
-    abstract scanFile(): void
 
     scanDeletions() {
         for (let match of this.file_content.matchAll(this.data.EMPTY_REGEXP)) {
@@ -189,11 +219,211 @@ abstract class AbstractFile {
         return result_arr.join(" > ")
     }
 
-    abstract writeIDs(): void
-
     removeEmpties() {
         //removes notes with the DELETE keyword
         this.file_content = this.file_content.replace(this.data.EMPTY_REGEXP, "")
+    }
+
+    add_spans_to_ignore() {
+        this.ignore_spans = []
+        this.ignore_spans.push(...spans(this.data.FROZEN_REGEXP, this.file_content))
+        const deck_result = this.file_content.match(this.data.DECK_REGEXP)
+        if (deck_result) {
+            this.ignore_spans.push([deck_result.index, deck_result.index + deck_result[0].length])
+        }
+        const tag_result = this.file_content.match(this.data.TAG_REGEXP)
+        if (tag_result) {
+            this.ignore_spans.push([tag_result.index, tag_result.index + tag_result[0].length])
+        }
+        this.ignore_spans.push(...spans(this.data.NOTE_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(this.data.INLINE_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(c.OBS_INLINE_MATH_REGEXP, this.file_content))
+        this.ignore_spans.push(...spans(c.OBS_DISPLAY_MATH_REGEXP, this.file_content))
+    }
+
+    async scanNotes() {
+        for (let note_match of this.file_content.matchAll(this.data.NOTE_REGEXP)) {
+            let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
+            // That second thing essentially gets the index of the end of the first capture group.
+            let parsed = await new Note(
+                this.data.fields_dict,
+                this.frozen_fields_dict,
+                this.formatter,
+                this.data,
+                this.app
+            ).parse(
+                note,
+                this.url,
+                this.data.add_context ? this.getContextAtIndex(note_match.index) : "",
+                this.path
+            )
+
+            if (!parsed)
+                continue
+
+            if (parsed.identifier == null) {
+                parsed.identifierPosition = position
+                this.regular_notes_to_add.push(parsed)
+            } else if (!this.data.EXISTING_IDS.includes(parsed.identifier)) {
+                // Need to show an error otherwise
+                console.warn("Note with id", parsed.identifier, " in file ", this.obsidian_file.path, " does not exist in Anki!")
+            } else {
+                this.notes_to_edit.push(parsed)
+            }
+        }
+    }
+
+    async scanInlineNotes() {
+        for (let note_match of this.file_content.matchAll(this.data.INLINE_REGEXP)) {
+            let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
+            // That second thing essentially gets the index of the end of the first capture group.
+            let parsed = await new InlineNote(
+                this.data.fields_dict,
+                this.frozen_fields_dict,
+                this.formatter,
+                this.data,
+                this.app
+            ).parse(
+                note,
+                this.url,
+                this.data.add_context ? this.getContextAtIndex(note_match.index) : "",
+                this.path
+            )
+
+            if(!parsed)
+                continue
+
+            if (parsed.identifier == null) {
+                parsed.identifierPosition = position
+                this.inline_notes_to_add.push(parsed)
+            } else if (!this.data.EXISTING_IDS.includes(parsed.identifier)) {
+                // Need to show an error
+                console.warn("Note with id", parsed.identifier, " in file ", this.obsidian_file.path, " does not exist in Anki!")
+            } else {
+                this.notes_to_edit.push(parsed)
+            }
+        }
+    }
+
+    async search(note_type: string, regexp_str: string) {
+        //Search the file for regex matches
+        //ignoring matches inside ignore_spans,
+        //and adding any matches to ignore_spans.
+        for (let search_id of [true, false]) {
+            for (let search_tags of [true, false]) {
+                let id_str = search_id ? ID_REGEXP_STR : ""
+                let tag_str = search_tags ? TAG_REGEXP_STR : ""
+                let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
+                for (let match of findignore(regexp, this.file_content, this.ignore_spans)) {
+                    this.ignore_spans.push([match.index, match.index + match[0].length])
+                    let matchObj = this.formatMatchDict(match, search_id, search_tags)
+                    const parsed: AnkiConnectNoteAndID = await new RegexNote(
+                        this.frozen_fields_dict,
+                        this.formatter,
+                        this.data,
+                        note_type,
+                        this.app
+                    ).parse(
+                        matchObj,
+                        this.url,
+                        this.data.add_context ? this.getContextAtIndex(match.index) : "",
+                        this.path
+                    )
+
+                    if(!parsed){
+                        this.ignore_spans.pop()
+                        continue
+                    }
+
+                    if (search_id) {
+                        if (!(this.data.EXISTING_IDS.includes(parsed.identifier))) {
+                            console.warn("Note with id", parsed.identifier, " in file ", this.obsidian_file.path, " does not exist in Anki!")
+                        } else {
+                            this.notes_to_edit.push(parsed)
+                        }
+                    } else {
+                        parsed.identifierPosition = match.index + match[0].length
+                        this.regex_notes_to_add.push(parsed)
+                    }
+                }
+            }
+        }
+    }
+
+    async scanFile() {
+        await this.scanNotes()
+        await this.scanInlineNotes()
+        for (let note_type in this.custom_regexps) {
+            const regexp_str: string = this.custom_regexps[note_type]
+            if (regexp_str) {
+                await this.search(note_type, regexp_str)
+            }
+        }
+        this.all_notes_to_add = this.regular_notes_to_add.concat(this.inline_notes_to_add).concat(this.regex_notes_to_add)
+        this.scanDeletions()
+        //look if anything was found in the file; return false if not
+        return (this.notes_to_delete.length + this.notes_to_edit.length + this.all_notes_to_add.length) == 0 ? false : true
+    }
+
+    writeIDs() {
+        let inserts: [number, string][] = []
+        
+        for (let note of this.regular_notes_to_add){
+            inserts.push([note.identifierPosition, id_to_str(note.identifier, false, this.data.comment)])
+        }
+        
+        for(let note of this.inline_notes_to_add){
+            inserts.push([note.identifierPosition, id_to_str(note.identifier, true, this.data.comment)])
+        }
+                
+        for (let note of this.regex_notes_to_add){
+            inserts.push([note.identifierPosition, "\n" + "\n" + id_to_str(note.identifier, false, this.data.comment)])
+        }
+
+        this.file_content = string_insert(this.file_content, inserts)
+    }
+
+    //ensure that not more than 2 newlines are present before the tag comment
+    fix_newline_ids() {
+        this.file_content = this.file_content.replace(double_regexp, "$1")
+    }
+
+    formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string> {
+        let match: Record<string, string> = {
+            "allMatch": matchArr[0],
+            "title": matchArr[1],
+            "text": matchArr[2],
+        }
+
+        let iterator = 3
+
+        if (search_tags) {
+            match["tags"] = matchArr[iterator]
+            iterator++
+        }
+
+        if (search_id) {
+            match["id"] = matchArr[iterator]
+            iterator++
+            match["link"] = matchArr[iterator]
+        }
+
+        return match
+    }
+
+
+
+
+
+    createNewDecks(): AnkiConnect.AnkiConnectRequest {
+        if(this.all_notes_to_add.length == 0)
+            return null
+        
+        let actions: AnkiConnect.AnkiConnectRequest[] = []
+        for (let note of this.all_notes_to_add) {
+            actions.push(AnkiConnect.createDeck(note.note.deckName))
+        }
+        return AnkiConnect.multi(actions)
     }
 
     getAddNotes(): AnkiConnect.AnkiConnectRequest {
@@ -240,267 +470,7 @@ abstract class AbstractFile {
         return AnkiConnect.multi(requests)
     }
 
-    getUpdateTags(): AnkiConnect.AnkiConnectRequest {
-        if(this.notes_to_edit.length == 0)
-            return null
-        
-        let actions: AnkiConnect.AnkiConnectRequest[] = []
-        for (let parsed of this.notes_to_edit) {
-            actions.push(
-                AnkiConnect.updateNoteTags(parsed.identifier, parsed.note.tags.join(" ") + " " + this.global_tags)
-            )
-        }
-        return AnkiConnect.multi(actions)
-    }
-
-}
-
-export class AllFile extends AbstractFile {
-    ignore_spans: [number, number][]
-    custom_regexps: Record<string, string>
-    //inline_notes_to_add: AnkiConnectNote[]
-    //inline_id_indexes: number[]
-    regex_notes_to_add: AnkiConnectNoteAndID[] = []
-    //regex_id_indexes: number[]
-    
-    app: App
-    obsidian_file: TFile
-
-    constructor(file: TFile, file_contents: string, path: string, fullPath: string, url: string, data: FileData, file_cache: CachedMetadata, app: App) {
-        super(file_contents, path, fullPath, url, data, file_cache, app)
-        this.obsidian_file = file
-        this.custom_regexps = data.custom_regexps
-        this.app = app
-    }
-
-    add_spans_to_ignore() {
-        this.ignore_spans = []
-        this.ignore_spans.push(...spans(this.data.FROZEN_REGEXP, this.file_content))
-        const deck_result = this.file_content.match(this.data.DECK_REGEXP)
-        if (deck_result) {
-            this.ignore_spans.push([deck_result.index, deck_result.index + deck_result[0].length])
-        }
-        const tag_result = this.file_content.match(this.data.TAG_REGEXP)
-        if (tag_result) {
-            this.ignore_spans.push([tag_result.index, tag_result.index + tag_result[0].length])
-        }
-        this.ignore_spans.push(...spans(this.data.NOTE_REGEXP, this.file_content))
-        this.ignore_spans.push(...spans(this.data.INLINE_REGEXP, this.file_content))
-        this.ignore_spans.push(...spans(c.OBS_INLINE_MATH_REGEXP, this.file_content))
-        this.ignore_spans.push(...spans(c.OBS_DISPLAY_MATH_REGEXP, this.file_content))
-        this.ignore_spans.push(...spans(c.OBS_CODE_REGEXP, this.file_content))
-        this.ignore_spans.push(...spans(c.OBS_DISPLAY_CODE_REGEXP, this.file_content))
-    }
-
-    setupScan() {
-        this.setup_frozen_fields_dict()
-        this.setup_fileDefault_target_deck()
-        this.setup_global_tags()
-        this.add_spans_to_ignore()
-    }
-
-    /*scanNotes() {
-        for (let note_match of this.file.matchAll(this.data.NOTE_REGEXP)) {
-            let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
-            // That second thing essentially gets the index of the end of the first capture group.
-            let parsed = new Note(
-                note,
-                this.data.fields_dict,
-                this.data.curly_cloze,
-                this.data.highlights_to_cloze,
-                this.data.custom_cloze,
-                this.formatter
-            ).parse(
-                this.target_deck,
-                this.url,
-                this.frozen_fields_dict,
-                this.data,
-                this.data.add_context ? this.getContextAtIndex(note_match.index) : ""
-            )
-            if (parsed.identifier == null) {
-                // Need to make sure global_tags get added
-                parsed.note.tags.push(...this.global_tags.split(TAG_SEP))
-                this.notes_to_add.push(parsed.note)
-                this.id_indexes.push(position)
-            } else if (!this.data.EXISTING_IDS.includes(parsed.identifier)) {
-                if (parsed.identifier == CLOZE_ERROR) {
-                    continue
-                }
-                // Need to show an error otherwise
-                else if (parsed.identifier == NOTE_TYPE_ERROR) {
-                    console.warn("Did not recognise note type ", parsed.note.modelName, " in file ", this.path)
-                } else {
-                    console.warn("Note with id", parsed.identifier, " in file ", this.path, " does not exist in Anki!")
-                }
-            } else {
-                this.notes_to_edit.push(parsed)
-            }
-        }
-    }*/
-
-    /*scanInlineNotes() {
-        for (let note_match of this.file.matchAll(this.data.INLINE_REGEXP)) {
-            let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
-            // That second thing essentially gets the index of the end of the first capture group.
-            let parsed = new InlineNote(
-                note,
-                this.data.fields_dict,
-                this.data.curly_cloze,
-                this.data.highlights_to_cloze,
-                this.data.custom_cloze,
-                this.formatter
-            ).parse(
-                this.target_deck,
-                this.url,
-                this.frozen_fields_dict,
-                this.data,
-                this.data.add_context ? this.getContextAtIndex(note_match.index) : ""
-            )
-            if (parsed.identifier == null) {
-                // Need to make sure global_tags get added
-                parsed.note.tags.push(...this.global_tags.split(TAG_SEP))
-                this.inline_notes_to_add.push(parsed.note)
-                this.inline_id_indexes.push(position)
-            } else if (!this.data.EXISTING_IDS.includes(parsed.identifier)) {
-                // Need to show an error
-                if (parsed.identifier == CLOZE_ERROR) {
-                    continue
-                }
-                console.warn("Note with id", parsed.identifier, " in file ", this.path, " does not exist in Anki!")
-            } else {
-                this.notes_to_edit.push(parsed)
-            }
-        }
-    }*/
-
-    async search(note_type: string, regexp_str: string) {
-        //Search the file for regex matches
-        //ignoring matches inside ignore_spans,
-        //and adding any matches to ignore_spans.
-        for (let search_id of [true, false]) {
-            for (let search_tags of [true, false]) {
-                let id_str = search_id ? ID_REGEXP_STR : ""
-                let tag_str = search_tags ? TAG_REGEXP_STR : ""
-                let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
-                for (let match of findignore(regexp, this.file_content, this.ignore_spans)) {
-                    this.ignore_spans.push([match.index, match.index + match[0].length])
-                    let matchObj = this.formatMatchDict(match, search_id, search_tags)
-
-                    let deck = matchObj["link"] ? this.getDeckFromLink(matchObj["link"]) : this.fileDefault_target_deck
-                    const parsed: AnkiConnectNoteAndID = await new RegexNote(
-                        matchObj, note_type, this.data.fields_dict,
-                        search_tags, search_id, this.data.curly_cloze, this.data.highlights_to_cloze, this.data.custom_cloze, this.formatter
-                    ).parse(
-                        deck,
-                        this.url,
-                        this.frozen_fields_dict,
-                        this.data,
-                        this.data.add_context ? this.getContextAtIndex(match.index) : ""
-                    )
-                    if (search_id) {
-                        if (!(this.data.EXISTING_IDS.includes(parsed.identifier))) {
-                            if (parsed.identifier == CLOZE_ERROR) {
-                                // This means it wasn't actually a note! So we should remove it from ignore_spans
-                                this.ignore_spans.pop()
-                                continue
-                            }
-                            console.warn("Note with id", parsed.identifier, " in file ", this.path, " does not exist in Anki!")
-                        } else {
-                            this.notes_to_edit.push(parsed)
-                        }
-                    } else {
-                        if (parsed.identifier == CLOZE_ERROR) {
-                            // This means it wasn't actually a note! So we should remove it from ignore_spans
-                            this.ignore_spans.pop()
-                            continue
-                        }
-                        //parsed.note.tags.push(...this.global_tags.split(TAG_SEP))
-                        parsed.identifierPosition = match.index + match[0].length
-                        this.regex_notes_to_add.push(parsed)
-                        //this.regex_id_indexes.push(match.index + match[0].length)
-                    }
-                }
-            }
-        }
-    }
-
-    async scanFile() {
-        this.setupScan()
-        //this.scanNotes()
-        //this.scanInlineNotes()
-        for (let note_type in this.custom_regexps) {
-            const regexp_str: string = this.custom_regexps[note_type]
-            if (regexp_str) {
-                await this.search(note_type, regexp_str)
-            }
-        }
-        this.all_notes_to_add = /*this.notes_to_add.concat(this.inline_notes_to_add).concat*/(this.regex_notes_to_add)
-        this.scanDeletions()
-        //look if anything was found in the file; return false if not
-        return (/*this.inline_notes_to_add.length + this.notes_to_add.length + */this.notes_to_delete.length + this.notes_to_edit.length + this.all_notes_to_add.length) == 0 ? false : true
-    }
-
-    writeIDs() {
-        let normal_inserts: [number, string][] = []
-        /*this.id_indexes.forEach(
-            (id_position: number, index: number) => {
-                const identifier: number | null = this.note_ids[index]
-                if (identifier) {
-                    normal_inserts.push([id_position, id_to_str(identifier, false, this.data.comment)])
-                }
-            }
-        )
-        let inline_inserts: [number, string][] = []
-        
-        this.inline_id_indexes.forEach(
-            (id_position: number, index: number) => {
-                const identifier: number | null = this.note_ids[index + this.notes_to_add.length] //Since regular then inline
-                if (identifier) {
-                    inline_inserts.push([id_position, id_to_str(identifier, true, this.data.comment)])
-                }
-            }
-        )*/
-        let regex_inserts: [number, string][] = []
-        
-        for (let note of this.regex_notes_to_add){
-            regex_inserts.push ([note.identifierPosition, "\n" + "\n" + id_to_str(note.identifier, false, this.data.comment)])
-
-        }
-
-        this.file_content = string_insert(this.file_content, regex_inserts)
-    }
-
-    getDeckFromLink(link: string) {
-        let tempFile = this.app.metadataCache.getFirstLinkpathDest(link, "")
-        let deck = tempFile.path.replaceAll("/", "::")
-        const index = deck.lastIndexOf('::');
-        if (index != -1) {
-            deck = deck.substring(0, index);
-        }
-        deck = this.data.template["deckName"] + "::" + deck
-        return deck
-    }
-
-    formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string> {
-        let match: Record<string, string> = {
-            "allMatch": matchArr[0],
-            "title": matchArr[1],
-            "text": matchArr[2],
-        }
-
-        let iterator = 3
-
-        if (search_tags) {
-            match["tags"] = matchArr[iterator]
-            iterator++
-        }
-
-        if (search_id) {
-            match["id"] = matchArr[iterator]
-            iterator++
-            match["link"] = matchArr[iterator]
-        }
-
-        return match
+    getHash(): string {
+        return Md5.hashStr(this.file_content) as string
     }
 }
