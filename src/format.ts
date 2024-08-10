@@ -3,6 +3,7 @@ import { basename, extname } from 'path'
 import { CachedMetadata, MarkdownRenderer, Component, App } from 'obsidian'
 import * as c from './constants'
 import { FileData } from './interfaces/settings-interface'
+import obsidian_to_anki_plugin from '../main'
 
 const ANKI_MATH_REGEXP:RegExp = /(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))/g
 const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
@@ -33,22 +34,15 @@ export class FormatConverter {
 	file_cache: CachedMetadata
 	vault_name: string
 	detectedMedia: Set<string>
-	app: App
+	plugin: obsidian_to_anki_plugin
 	path: string
-	cloze: boolean
-	highlights_to_cloze:  boolean
-	custom_cloze: boolean
 
-	constructor(file_cache: CachedMetadata, data:FileData, path: string, app:App) {
-		this.vault_name = data.vault_name
+
+	constructor(file_cache: CachedMetadata, data:FileData, path: string, plugin:obsidian_to_anki_plugin) {
 		this.file_cache = file_cache
 		this.detectedMedia = new Set()
-		this.app = app
 		this.path = path
-
-		this.cloze = data.curly_cloze
-		this.highlights_to_cloze = data.highlights_to_cloze
-		this.custom_cloze = data.custom_cloze
+		this.plugin = plugin
 	}
 
 	getUrlFromLink(link: string): string {
@@ -190,9 +184,8 @@ export class FormatConverter {
 	}
 
 	highlight_embed(note_text: string): string{
-		//TODO: Add colour option
-		return note_text.replaceAll(	`<div class="markdown-preview-view markdown-rendered show-indentation-guide">`, 
-									`<div class="markdown-preview-view markdown-rendered show-indentation-guide" style="background-color:rgba(245, 248, 249, 0.85);">`)
+		return note_text.replaceAll(`<div class="markdown-preview-view markdown-rendered show-indentation-guide">`, 
+									`<div class="markdown-preview-view markdown-rendered show-indentation-guide" style="background-color:` + this.plugin.settings.Defaults.EmbedColour + `;">`)
 	}
 
 	async format(note_text: string): Promise<string> {
@@ -207,11 +200,11 @@ export class FormatConverter {
 		[note_text, mermaidMatches] = this.censor(note_text, c.OBS_MERMAID_REGEXP, MERMAID_CODE_REPLACE);
 		mermaidMatches = this.formatMermaidMatches(mermaidMatches);
 
-		if (this.cloze||this.custom_cloze) {
-			if (this.highlights_to_cloze) {
+		if (this.plugin.settings.Defaults.CurlyCloze||this.plugin.settings.Defaults.AnkiCustomCloze) {
+			if (this.plugin.settings.Defaults.HighlightsToCloze) {
 				note_text = note_text.replace(HIGHLIGHT_REGEXP, "{$1}")
 			}
-			if(this.custom_cloze){
+			if(this.plugin.settings.Defaults.AnkiCustomCloze){
 				note_text = this.custom_cloze_JS(note_text)
 			} else{
 				note_text = this.curly_to_cloze(note_text)
@@ -225,7 +218,7 @@ export class FormatConverter {
 		//convert markdown to html
 		let container: HTMLElement = document.createElement('converter')
 		let component = new Component
-		await MarkdownRenderer.render(this.app, note_text, container, this.path, component)
+		await MarkdownRenderer.render(this.plugin.app, note_text, container, this.path, component)
 	
 		//links in embeds are not handled in formatLinks, so do it here (but worse, beacause currently not using file cache)
 		this.formatEmbedLinks(container)

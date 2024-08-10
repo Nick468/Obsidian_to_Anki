@@ -7,9 +7,8 @@ import { FormatConverter } from './format'
 import { AnkiConnectNote, AnkiConnectNoteAndID } from './interfaces/note-interface'
 import { FIELDS_DICT, FROZEN_FIELDS_DICT } from './interfaces/field-interface'
 import { FileData } from './interfaces/settings-interface'
-import { App } from 'obsidian'
-import { link } from 'fs'
-import multimatch from 'multimatch'
+import obsidian_to_anki_plugin from '../main'
+
 
 const TAG_PREFIX:string = "Tags: "
 export const TAG_SEP:string = " "
@@ -41,18 +40,18 @@ abstract class AbstractNote {
     current_field: string
     ID_REGEXP: RegExp = /<!--ID:\s?(\d{13})\s?(?:\[\[([^|#]*).*\]\]\s*)?-->/
     
-    app: App    
+    plugin: obsidian_to_anki_plugin    
     fields_dict: FIELDS_DICT
     frozen_fields_dict: FROZEN_FIELDS_DICT
     data: FileData
     formatter: FormatConverter
 
-    constructor(fields_dict: FIELDS_DICT, frozen_fields_dict: FROZEN_FIELDS_DICT, formatter: FormatConverter, data: FileData, app:App) {
+    constructor(fields_dict: FIELDS_DICT, frozen_fields_dict: FROZEN_FIELDS_DICT, formatter: FormatConverter, data: FileData, plugin:obsidian_to_anki_plugin) {
         this.fields_dict = fields_dict
         this.frozen_fields_dict = frozen_fields_dict
         this.data = data
         this.formatter = formatter
-        this.app = app
+        this.plugin = plugin
     }
 
     abstract getSplitText(): string[]
@@ -87,7 +86,7 @@ abstract class AbstractNote {
 
         // add url
         if (url.length > 0) {
-            this.formatter.format_note_with_url(newNote, url, this.data.file_link_fields[note_type])
+            this.formatter.format_note_with_url(newNote, url, this.plugin.settings.noteTypes[note_type].file_link_field)
         }
         
         // frozen_fields ???
@@ -97,13 +96,13 @@ abstract class AbstractNote {
 		
         // add context field
         if (context.length > 0) {
-			const context_field = this.data.context_fields[note_type]
+			const context_field = this.plugin.settings.noteTypes[note_type].context_field
 			newNote.fields[context_field] += context
 		}
 		
         // add tags
         let tags:string[] = this.getTags()
-        if (this.data.add_obs_tags) {
+        if (this.plugin.settings.Defaults.AddObsidianTags) {
 			for (let key in newNote.fields) {
 				for (let match of newNote.fields[key].matchAll(OBS_TAG_REGEXP)) {
 					tags.push(match[1])
@@ -132,7 +131,7 @@ export class Note extends AbstractNote {
 
         this.split_text.pop()
         let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
-        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.app, this.data)]
+        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.plugin)]
     }
 
     getTags(): string[] {
@@ -191,7 +190,7 @@ export class InlineNote extends AbstractNote {
             return [null, null]
 
         let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
-        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.app, this.data)]
+        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.plugin)]
     }
 
     getTags(): string[] {
@@ -234,56 +233,31 @@ export class InlineNote extends AbstractNote {
 }
 
 export class RegexNote {
-    app: App
+    plugin: obsidian_to_anki_plugin
 
     field_names: string[]
-
-
-
 	match: Record<string, string>
 	note_type: string
-	groups: Array<string>
-	//identifier: number | null
-	//tags: string[]
-	
+	groups: Array<string>	
 
     private frozen_fields_dict: FROZEN_FIELDS_DICT
     protected data: FileData
     protected formatter: FormatConverter
 
 
-    constructor(frozen_fields_dict: FROZEN_FIELDS_DICT, formatter: FormatConverter, data: FileData, note_type: string, app: App) {
-        this.field_names = data.fields_dict[note_type]
+    constructor(frozen_fields_dict: FROZEN_FIELDS_DICT, formatter: FormatConverter, data: FileData, note_type: string, plugin: obsidian_to_anki_plugin) {
+        this.field_names = plugin.fields_dict[note_type]
         this.frozen_fields_dict = frozen_fields_dict
         this.data = data
         this.formatter = formatter
         this.note_type = note_type
-        this.app = app
+        this.plugin = plugin
     }
-
-
-	/*constructor(
-			match: Record<string, string>,
-			note_type: string,
-			fields_dict: FIELDS_DICT,
-			tags: boolean,
-			id: boolean,
-			formatter: FormatConverter
-        ) {
-		this.match = match
-		this.note_type = note_type
-		this.identifier = id ? parseInt(match["id"]) : null
-		this.tags = tags ? match["tags"].slice(TAG_PREFIX.length).split(TAG_SEP) : []
-		this.field_names = fields_dict[note_type]
-		this.formatter = formatter
-	}*/
 
 	async getFields(): Promise<Record<string, string>> {
 		let fields: Record<string, string> = {}
-        for (let field of this.field_names) {
-            //TODO: Stop stupid hardcoding
-            
-            if(field === this.data.extra_fields[this.note_type])
+        for (let field of this.field_names) {           
+            if(field === this.plugin.settings.noteTypes[this.note_type].extra_field)
                 continue
             
             fields[field] = ""
@@ -313,28 +287,26 @@ export class RegexNote {
 
         if(match.link){
             let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
-            newNote.deckName = linkToDeck.linkToDeckResolver(match.link, this.app, this.data)
+            newNote.deckName = linkToDeck.linkToDeckResolver(match.link, this.plugin)
             }
         else
             newNote.deckName = this.data.template.deckName
 		  
 		newNote.fields = await this.getFields()
-		const file_link_fields = this.data.file_link_fields
 		if (url) {
-            this.formatter.format_note_with_url(newNote, url, file_link_fields[this.note_type], match.title)
+            this.formatter.format_note_with_url(newNote, url, this.plugin.settings.noteTypes[this.note_type].file_link_field, match.title)
         }
         if (Object.keys(this.frozen_fields_dict).length) {
             this.formatter.format_note_with_frozen_fields(newNote, this.frozen_fields_dict)
         }
 		if (context) {
-			const context_field = this.data.context_fields[this.note_type]
-			newNote.fields[context_field] += context
+            this.plugin.settings.noteTypes[this.note_type].context_field += context
 		}
 		if (this.note_type.includes("Cloze") && !(note_has_clozes(newNote))) {
             console.warn("Close error occured in file " + filePath)
             return null // An error code that says "don't add this note!"
 		}
-		if (this.data.add_obs_tags) {
+		if (this.plugin.settings.Defaults.AddObsidianTags) {
 			for (let key in newNote.fields) {
 				for (let match of newNote.fields[key].matchAll(OBS_TAG_REGEXP)) {
 					tags.push(match[1])
@@ -350,16 +322,23 @@ export class RegexNote {
 class linkToDeckResolver{
     constructor() {}
 
-    linkToDeckResolver(link: string, app: App, data: FileData): string {
+    linkToDeckResolver(link: string, plugin:obsidian_to_anki_plugin): string {
         if(!link)
             return
-        let tempFile = app.metadataCache.getFirstLinkpathDest(link, "")
+
+        let tempFile = plugin.app.metadataCache.getFirstLinkpathDest(link, "")
+        if(!tempFile)
+            return
+
         let deck = tempFile.path.replaceAll("/", "::")
         const index = deck.lastIndexOf('::');
         if (index != -1) {
             deck = deck.substring(0, index);
         }
-        deck = data.defaultDeck + "::" + deck
+        if(plugin.settings.Defaults.GlobalDeck.length == 0)
+            return deck
+
+        deck = plugin.settings.Defaults.GlobalDeck + "::" + deck
         return deck
     }   
 }

@@ -1,10 +1,12 @@
 /*Class for managing a list of files, and their Anki requests.*/
-import { fileManagerData, FileData} from './interfaces/settings-interface'
+import { FileData} from './interfaces/settings-interface'
 import { App, TFile, TFolder, CachedMetadata, FileSystemAdapter, Notice } from 'obsidian'
 import { AllFile } from './file'
 import * as AnkiConnect from './anki'
 import { basename } from 'path'
 import multimatch from "multimatch"
+import obsidian_to_anki_plugin from '../main';
+
 
 interface response{
     result: Array<{ //result of all the operations of one operation type (i.e. addFile, addDeck...)
@@ -35,18 +37,18 @@ function difference<T>(setA: Set<T>, setB: Set<T>): Set<T> {
 }
 
 export class FileManager {
+    plugin: obsidian_to_anki_plugin
     app: App
     fileData: FileData
-    fileManagerData: fileManagerData
     scanDir: TFile
     files: AllFile[] = []
     file_hashes: Record<string, string>
     added_media_set: Set<string>
 
-    constructor(app: App, data:FileData, filemanagerData: fileManagerData, scanDir: TFile, file_hashes: Record<string, string>, added_media: string[]) {
-        this.app = app
-        this.fileData = data
-        this.fileManagerData = filemanagerData
+    constructor(plugin: obsidian_to_anki_plugin, fileData:FileData, scanDir: TFile, file_hashes: Record<string, string>, added_media: string[]) {
+        this.plugin = plugin
+        this.app = plugin.app
+        this.fileData = fileData
         this.scanDir = scanDir
         this.file_hashes = file_hashes
         this.added_media_set = new Set(added_media)
@@ -61,7 +63,7 @@ export class FileManager {
                 new Error("Can only initiate search on markdown files")
             obsidian_files.push(this.scanDir)
         }
-        obsidian_files = this.findFilesThatAreNotIgnored(obsidian_files, this.fileManagerData);
+        obsidian_files = this.findFilesThatAreNotIgnored(obsidian_files, this.plugin.settings.IGNORED_FILE_GLOBS);
         
         for (let file of obsidian_files) {
             let content: string = await this.app.vault.read(file)
@@ -71,8 +73,8 @@ export class FileManager {
                     file,
                     content,
                     cache,
-                    structuredClone(this.fileData), //TODO: check if this is passed by reference or by value
-                    this.app
+                    structuredClone(this.fileData),
+                    this.plugin
                 )
             )
         }
@@ -171,9 +173,9 @@ export class FileManager {
         }
     }
 
-    findFilesThatAreNotIgnored(files:TFile[], fileData:fileManagerData):TFile[]{
+    findFilesThatAreNotIgnored(files:TFile[], ignored_file_globs:string[]):TFile[]{
         let ignoredFiles = []
-        ignoredFiles = multimatch(files.map(file => file.path), fileData.ignored_file_globs)
+        ignoredFiles = multimatch(files.map(file => file.path), ignored_file_globs)
 
         let notIgnoredFiles = files.filter(file => !ignoredFiles.contains(file.path))
         return notIgnoredFiles;

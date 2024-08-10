@@ -9,6 +9,7 @@ import * as AnkiConnect from './anki'
 import * as c from './constants'
 import { FormatConverter } from './format'
 import { CachedMetadata, HeadingCache, App, TFile } from 'obsidian'
+import obsidian_to_anki_plugin from '../main';
 
 //const double_regexp: RegExp = /(?:\r\n|\r|\n)+((?:\r\n|\r|\n){2}(?:<!--)?ID:\d+)/g
 const double_regexp: RegExp = /(?:\n)+(\n{2}<!--ID:\d+.*)/g
@@ -71,7 +72,7 @@ function* findignore(pattern: RegExp, text: string, ignore_spans: Array<[number,
 }
 
 export class AllFile {
-    app: App
+    plugin: obsidian_to_anki_plugin
 
     obsidian_file: TFile
     
@@ -98,13 +99,10 @@ export class AllFile {
     formatter: FormatConverter
 
     ignore_spans: [number, number][]
-    custom_regexps: Record<string, string>
     
 
-    constructor(file: TFile, file_content: string, file_cache: CachedMetadata, data: FileData, app: App) {    
+    constructor(file: TFile, file_content: string, file_cache: CachedMetadata, data: FileData, plugin: obsidian_to_anki_plugin) {    
         this.obsidian_file = file
-        this.custom_regexps = data.custom_regexps
-        this.app = app
         this.file_cache = file_cache
         this.data = data
         this.file_content = file_content
@@ -112,7 +110,7 @@ export class AllFile {
         
         this.path = file.path
 
-        this.url = data.add_file_link ? "obsidian://open?vault=" + encodeURIComponent(data.vault_name) + String.raw`&file=` + encodeURIComponent(file.path) : ""
+        this.url = this.plugin.settings.Defaults.AddFileLink ? "obsidian://open?vault=" + encodeURIComponent(this.plugin.app.vault.getName()) + String.raw`&file=` + encodeURIComponent(file.path) : ""
 
         this.setup_frozen_fields_dict()
         this.add_spans_to_ignore()
@@ -121,14 +119,14 @@ export class AllFile {
         this.setup_fileDefault_tags()
 
         
-        this.formatter = new FormatConverter(file_cache, data, this.path, app)
+        this.formatter = new FormatConverter(file_cache, data, this.path, plugin)
         
     }
 
     setup_frozen_fields_dict() {
         let frozen_fields_dict: FROZEN_FIELDS_DICT = {}
-        for (let note_type in this.data.fields_dict) {
-            let fields: string[] = this.data.fields_dict[note_type]
+        for (let note_type in this.plugin.fields_dict) {
+            let fields: string[] = this.plugin.fields_dict[note_type]
             let temp_dict: Record<string, string> = {}
             for (let field of fields) {
                 temp_dict[field] = ""
@@ -155,19 +153,19 @@ export class AllFile {
         // this.data.template.deckName contains the global target deck set in the settings
         
         // overwrite default deck by appending the obsidian file path
-        if (this.data.mirrorObsidianFolders) {
+        if (this.plugin.settings.Defaults.MirrorObsidianStructure) {
             let pathWithoutExtension: string = this.path.slice(0, -3)
             let obsidianFolderDeck: string  = pathWithoutExtension.replaceAll("/", "::")
             
-            if(this.data.defaultDeck.length == 0)
+            if(this.plugin.settings.Defaults.GlobalDeck.length == 0)
                 this.data.template.deckName = obsidianFolderDeck
             else
-                this.data.template.deckName = this.data.defaultDeck + "::" + obsidianFolderDeck
+                this.data.template.deckName = this.plugin.settings.Defaults.GlobalDeck + "::" + obsidianFolderDeck
         }
 
         // overwrtie default deck by settings -> folder settings
-        if(this.data.folder_decks[this.path]) //TODO: Check
-            this.data.template.deckName = this.data.folder_decks[this.path]
+        if(this.plugin.settings.FOLDER_DECKS[this.path]) //TODO: Check
+            this.data.template.deckName = this.plugin.settings.FOLDER_DECKS[this.path]
 
         // in-file overwrite by TARGET DECK keyword
         let match = this.file_content.match(this.data.DECK_REGEXP)
@@ -180,6 +178,10 @@ export class AllFile {
         const result = this.file_content.match(this.data.TAG_REGEXP)
         if(result)
             this.data.template.tags.push(...result[1].split(" ")) 
+
+        if(this.plugin.settings.FOLDER_TAGS[this.path])
+            this.data.template.tags.push(this.plugin.settings.FOLDER_TAGS[this.path])
+
     }
 
     scanDeletions() {
@@ -246,15 +248,15 @@ export class AllFile {
             let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
             // That second thing essentially gets the index of the end of the first capture group.
             let parsed = await new Note(
-                this.data.fields_dict,
+                this.plugin.fields_dict,
                 this.frozen_fields_dict,
                 this.formatter,
                 this.data,
-                this.app
+                this.plugin
             ).parse(
                 note,
                 this.url,
-                this.data.add_context ? this.getContextAtIndex(note_match.index) : "",
+                this.plugin.settings.Defaults.AddContext ? this.getContextAtIndex(note_match.index) : "",
                 this.path
             )
 
@@ -278,15 +280,15 @@ export class AllFile {
             let [note, position]: [string, number] = [note_match[1], note_match.index + note_match[0].indexOf(note_match[1]) + note_match[1].length]
             // That second thing essentially gets the index of the end of the first capture group.
             let parsed = await new InlineNote(
-                this.data.fields_dict,
+                this.plugin.fields_dict,
                 this.frozen_fields_dict,
                 this.formatter,
                 this.data,
-                this.app
+                this.plugin
             ).parse(
                 note,
                 this.url,
-                this.data.add_context ? this.getContextAtIndex(note_match.index) : "",
+                this.plugin.settings.Defaults.AddContext ? this.getContextAtIndex(note_match.index) : "",
                 this.path
             )
 
@@ -322,11 +324,11 @@ export class AllFile {
                         this.formatter,
                         this.data,
                         note_type,
-                        this.app
+                        this.plugin
                     ).parse(
                         matchObj,
                         this.url,
-                        this.data.add_context ? this.getContextAtIndex(match.index) : "",
+                        this.plugin.settings.Defaults.AddContext ? this.getContextAtIndex(match.index) : "",
                         this.path
                     )
 
@@ -353,8 +355,8 @@ export class AllFile {
     async scanFile() {
         await this.scanNotes()
         await this.scanInlineNotes()
-        for (let note_type in this.custom_regexps) {
-            const regexp_str: string = this.custom_regexps[note_type]
+        for (let note_type in this.plugin.settings.noteTypes) {
+            const regexp_str: string = this.plugin.settings.noteTypes[note_type].custom_regexp
             if (regexp_str) {
                 await this.search(note_type, regexp_str)
             }
@@ -369,15 +371,15 @@ export class AllFile {
         let inserts: [number, string][] = []
         
         for (let note of this.regular_notes_to_add){
-            inserts.push([note.identifierPosition, id_to_str(note.identifier, false, this.data.comment)])
+            inserts.push([note.identifierPosition, id_to_str(note.identifier, false, this.plugin.settings.Defaults.IDComments)])
         }
         
         for(let note of this.inline_notes_to_add){
-            inserts.push([note.identifierPosition, id_to_str(note.identifier, true, this.data.comment)])
+            inserts.push([note.identifierPosition, id_to_str(note.identifier, true, this.plugin.settings.Defaults.IDComments)])
         }
                 
         for (let note of this.regex_notes_to_add){
-            inserts.push([note.identifierPosition, "\n" + "\n" + id_to_str(note.identifier, false, this.data.comment)])
+            inserts.push([note.identifierPosition, "\n" + "\n" + id_to_str(note.identifier, false, this.plugin.settings.Defaults.IDComments)])
         }
 
         this.file_content = string_insert(this.file_content, inserts)
