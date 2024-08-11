@@ -123,15 +123,15 @@ export class FileManager {
             if(!response[i])
                 continue
             if(response[i].error)
-                new Notice("Error: " + response[i].error)
+                console.log("Error: " + response[i].error)
             else{
-                for(let j; j<response[i].result.length; j++){
+                for(let j = 0; j<response[i].result.length; j++){
                     if(response[i].result[j].error)
-                        new Notice("Error: " + response[i].result[j].error)
+                        console.log("Error: " + response[i].result[j].error)
                     else{
-                        for(let k; k<response[i].result[j].result.length; k++){
+                        for(let k = 0; k<response[i].result[j].result.length; k++){
                             if(response[i].result[j].result[k].error)
-                                new Notice("Error: " + response[i].result[j].result[k].error)
+                                console.log("Error: " + response[i].result[j].result[k].error)
                         }
                     }
                 }

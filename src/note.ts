@@ -300,7 +300,8 @@ export class RegexNote {
             this.formatter.format_note_with_frozen_fields(newNote, this.frozen_fields_dict)
         }
 		if (context) {
-            this.plugin.settings.noteTypes[this.note_type].context_field += context
+            const context_field = this.plugin.settings.noteTypes[this.note_type].context_field
+			newNote.fields[context_field] += context
 		}
 		if (this.note_type.includes("Cloze") && !(note_has_clozes(newNote))) {
             console.warn("Close error occured in file " + filePath)

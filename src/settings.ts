@@ -41,10 +41,10 @@ export class SettingsTab extends PluginSettingTab {
 				dropdown.setValue(
 					note_type
 				)
-				dropdown.onChange((value) => {
+				dropdown.onChange(async (value) => {
 					this.plugin.settings.noteTypes[value] = structuredClone(this.plugin.settings.noteTypes[note_type])
 					this.plugin.settings.noteTypes[note_type].custom_regexp = ""
-					this.plugin.saveAllData()
+					await this.plugin.saveAllData()
 					this.display()
 				})
 			}
@@ -58,11 +58,11 @@ export class SettingsTab extends PluginSettingTab {
 		let custom_regexp = new Setting(row_cells[1] as HTMLElement)
 			.addText(
 					text => text.setValue(
-					this.plugin.settings.noteTypes.hasOwnProperty(note_type) ? this.plugin.settings.noteTypes[note_type].custom_regexp : ""
+						this.plugin.settings.noteTypes[note_type].custom_regexp ? this.plugin.settings.noteTypes[note_type].custom_regexp : ""
 					)
-					.onChange((value) => {
+					.onChange(async (value) => {
 						this.plugin.settings.noteTypes[note_type].custom_regexp = value
-						this.plugin.saveAllData()
+						await this.plugin.saveAllData()
 						if(value == "") // delete this note
 							this.display()
 					})
@@ -82,11 +82,11 @@ export class SettingsTab extends PluginSettingTab {
 						dropdown.addOption(field, field)
 					}
 					dropdown.setValue(
-						this.plugin.settings.noteTypes.hasOwnProperty(note_type) ? this.plugin.settings.noteTypes[note_type].file_link_field : field_names[0]
+						this.plugin.settings.noteTypes[note_type].file_link_field ? this.plugin.settings.noteTypes[note_type].file_link_field : field_names[0]
 					)
-					dropdown.onChange((value) => {
+					dropdown.onChange(async (value) => {
 						this.plugin.settings.noteTypes[note_type].file_link_field = value
-						this.plugin.saveAllData()
+						await this.plugin.saveAllData()
 					})
 				}
 			)
@@ -99,16 +99,17 @@ export class SettingsTab extends PluginSettingTab {
 		let context_field = new Setting(row_cells[3] as HTMLElement)
 			.addDropdown(
 				async dropdown => {
-					const field_names = this.plugin.fields_dict[note_type]
+					let field_names: string[] = [""]
+					field_names.push(...this.plugin.fields_dict[note_type])
 					for (let field of field_names) {
 						dropdown.addOption(field, field)
 					}
 					dropdown.setValue(
-						this.plugin.settings.noteTypes.hasOwnProperty(note_type) ? this.plugin.settings.noteTypes[note_type].context_field : field_names[0]
+						this.plugin.settings.noteTypes[note_type].context_field ? this.plugin.settings.noteTypes[note_type].context_field : field_names[0]
 					)
-					dropdown.onChange((value) => {
+					dropdown.onChange(async (value) => {
 						this.plugin.settings.noteTypes[note_type].context_field = value
-						this.plugin.saveAllData()
+						await this.plugin.saveAllData()
 					})
 				}
 			)
@@ -121,43 +122,23 @@ export class SettingsTab extends PluginSettingTab {
 		let extra_field = new Setting(row_cells[4] as HTMLElement)
 		.addDropdown(
 			async dropdown => {
-				const field_names = this.plugin.fields_dict[note_type]
+				let field_names: string[] = [""]
+				field_names.push(...this.plugin.fields_dict[note_type])
 				for (let field of field_names) {
 					dropdown.addOption(field, field)
 				}
 				dropdown.setValue(
-					this.plugin.settings.noteTypes.hasOwnProperty(note_type) ? this.plugin.settings.noteTypes[note_type].context_field : field_names[0]
+					this.plugin.settings.noteTypes[note_type].extra_field ? this.plugin.settings.noteTypes[note_type].extra_field : field_names[0]
 				)
-				dropdown.onChange((value) => {
+				dropdown.onChange(async (value) => {
 					this.plugin.settings.noteTypes[note_type].extra_field = value
-					this.plugin.saveAllData()
+					await this.plugin.saveAllData()
 				})
 			}
 		)
 	extra_field.settingEl = row_cells[4] as HTMLElement
 	extra_field.infoEl.remove()
 	extra_field.controlEl.className += " anki-center"
-	}
-
-	create_collapsible(name: string):HTMLDivElement {
-		let {containerEl} = this;
-		let div = containerEl.createEl('div', {cls: "collapsible-item"})
-		div.innerHTML = `
-			<div class="collapsible-item-self"><div class="collapsible-item-collapse collapse-icon anki-rotated"><svg viewBox="0 0 100 100" width="8" height="8" class="right-triangle"><path fill="currentColor" stroke="currentColor" d="M94.9,20.8c-1.4-2.5-4.1-4.1-7.1-4.1H12.2c-3,0-5.7,1.6-7.1,4.1c-1.3,2.4-1.2,5.2,0.2,7.6L43.1,88c1.5,2.3,4,3.7,6.9,3.7 s5.4-1.4,6.9-3.7l37.8-59.6C96.1,26,96.2,23.2,94.9,20.8L94.9,20.8z"></path></svg></div><div class="collapsible-item-inner"></div><header>${name}</header></div>
-		`
-		div.addEventListener('click', function () {
-			this.classList.toggle("active")
-			let icon = this.firstElementChild.firstElementChild as HTMLElement
-			icon.classList.toggle("anki-rotated")
-			let content = this.nextElementSibling as HTMLElement
-			if (content.style.display === "block") {
-				content.style.display = "none"
-			} else {
-				content.style.display = "block"
-			}
-		})
-
-		return div
 	}
 
 	async setup_note_table() {
@@ -215,6 +196,7 @@ export class SettingsTab extends PluginSettingTab {
 					for(let note_type of this.plugin.note_types){
 						if(this.plugin.settings.noteTypes[note_type].custom_regexp == ""){
 							this.plugin.settings.noteTypes[note_type].custom_regexp = "Change Me"
+							await this.plugin.saveAllData
 							this.display()
 							break
 						}
@@ -268,9 +250,9 @@ export class SettingsTab extends PluginSettingTab {
 				.setName(key)
 				.addText(
 						text => text.setValue(this.plugin.settings["Syntax"][key])
-						.onChange((value) => {
+						.onChange(async (value) => {
 							this.plugin.settings["Syntax"][key] = value
-							this.plugin.saveAllData()
+							await this.plugin.saveAllData()
 						})
 				)
 		}
@@ -292,9 +274,9 @@ export class SettingsTab extends PluginSettingTab {
 					.setDesc(defaultDescs[key][1])
 					.addText(
 						text => text.setValue(this.plugin.settings.Defaults[key])
-						.onChange((value) => {
+						.onChange(async (value) => {
 							this.plugin.settings.Defaults[key] = value
-							this.plugin.saveAllData()
+							await this.plugin.saveAllData()
 						})
 				)
 			} else if (typeof this.plugin.settings.Defaults[key] === "boolean") {
@@ -303,9 +285,9 @@ export class SettingsTab extends PluginSettingTab {
 					.setDesc(defaultDescs[key][1])
 					.addToggle(
 						toggle => toggle.setValue(this.plugin.settings.Defaults[key])
-						.onChange((value) => {
+						.onChange(async (value) => {
 							this.plugin.settings.Defaults[key] = value
-							this.plugin.saveAllData()
+							await this.plugin.saveAllData()
 						})
 					)
 			} else {
@@ -340,15 +322,16 @@ export class SettingsTab extends PluginSettingTab {
 	setup_folder_field(folder: TFolder, row_cells: HTMLCollection){
 		let folder_deck = new Setting(row_cells[0] as HTMLElement)
 			.addText(
-				text => text.setValue(folder.name)
-				.onChange((value) => {
+				text => text.setValue(folder.path)
+				.onChange(async (value) => {
 					if(this.app.vault.getFolderByPath(value)){
 						this.plugin.settings.FOLDER_DECKS[value] = structuredClone(this.plugin.settings.FOLDER_DECKS[folder.path])
 						this.plugin.settings.FOLDER_TAGS[value] = structuredClone(this.plugin.settings.FOLDER_TAGS[folder.path])
 						this.plugin.settings.FOLDER_DECKS[folder.path] = ""
 						this.plugin.settings.FOLDER_TAGS[folder.path] = ""
 						folder_deck.settingEl.style.background = "white"
-						this.plugin.saveAllData()
+						await this.plugin.saveAllData()
+						this.display()
 					}else{
 						folder_deck.settingEl.style.background = "red"
 					}
@@ -361,16 +344,13 @@ export class SettingsTab extends PluginSettingTab {
 
 	setup_folder_deck(folder: TFolder, row_cells: HTMLCollection) {
 		let folder_decks = this.plugin.settings.FOLDER_DECKS
-		if (!(folder_decks.hasOwnProperty(folder.path))) {
-			folder_decks[folder.path] = ""
-		}
 		let folder_deck = new Setting(row_cells[1] as HTMLElement)
 			.addText(
 				text => text.setValue(folder_decks[folder.path])
-				.onChange((value) => {
+				.onChange(async (value) => {
 					this.plugin.settings.FOLDER_DECKS[folder.path] = value
-					this.plugin.saveAllData()
-					if(value == "") // delete this note
+					await this.plugin.saveAllData()
+					if(value == "") //maybe delete this note
 						this.display()
 				})
 			)
@@ -381,16 +361,13 @@ export class SettingsTab extends PluginSettingTab {
 
 	setup_folder_tag(folder: TFolder, row_cells: HTMLCollection) {
 		let folder_tags = this.plugin.settings.FOLDER_TAGS
-		if (!(folder_tags.hasOwnProperty(folder.path))) {
-			folder_tags[folder.path] = ""
-		}
 		let folder_tag = new Setting(row_cells[2] as HTMLElement)
 			.addText(
 				text => text.setValue(folder_tags[folder.path])
-				.onChange((value) => {
+				.onChange(async (value) => {
 					this.plugin.settings.FOLDER_TAGS[folder.path] = value
-					this.plugin.saveAllData()
-					if(value == "") // delete this note
+					await this.plugin.saveAllData()
+					if(value == "") // maybe delete this note
 						this.display()
 				})
 			)
@@ -414,7 +391,8 @@ export class SettingsTab extends PluginSettingTab {
 		let main_body = folder_table.createTBody()
 
 		for (let folder of folder_list) {
-			if((this.plugin.settings.FOLDER_DECKS[folder.path] == "" || !this.plugin.settings.FOLDER_DECKS[folder.path]) && (this.plugin.settings.FOLDER_TAGS[folder.path] == ""|| !this.plugin.settings.FOLDER_TAGS[folder.path]))
+			if(		(this.plugin.settings.FOLDER_DECKS[folder.path] === ""	|| !this.plugin.settings.FOLDER_DECKS[folder.path]) 
+				&& 	(this.plugin.settings.FOLDER_TAGS[folder.path] === ""	|| !this.plugin.settings.FOLDER_TAGS[folder.path]))
 				continue
 
 			folder_table.style.display = 'table'
@@ -438,9 +416,10 @@ export class SettingsTab extends PluginSettingTab {
 				button.setButtonText("Add").setClass("mod-cta")
 				.onClick(async () => {
 					for(let folder of folder_list){
-						if((this.plugin.settings.FOLDER_DECKS[folder.path] == "" || !this.plugin.settings.FOLDER_DECKS[folder.path]) && (this.plugin.settings.FOLDER_TAGS[folder.path] == ""|| !this.plugin.settings.FOLDER_TAGS[folder.path])){
+						if((this.plugin.settings.FOLDER_DECKS[folder.path] === "" || !this.plugin.settings.FOLDER_DECKS[folder.path]) && (this.plugin.settings.FOLDER_TAGS[folder.path] === ""|| !this.plugin.settings.FOLDER_TAGS[folder.path])){
 							this.plugin.settings.FOLDER_DECKS[folder.path] = "Change Me"
 							this.plugin.settings.FOLDER_TAGS[folder.path] = "Change Me"
+							await this.plugin.saveAllData()
 							this.display()
 							break
 						}
@@ -515,12 +494,12 @@ export class SettingsTab extends PluginSettingTab {
 			.addTextArea(text => {
 				text.setValue(this.plugin.settings.IGNORED_FILE_GLOBS.join("\n"))
 					.setPlaceholder("Examples: '**/*.excalidraw.md', 'Templates/**'")
-					.onChange((value) => {
+					.onChange(async (value) => {
 						let ignoreLines = value.split("\n")
 						ignoreLines = ignoreLines.filter(e => e.trim() != "") //filter out empty lines and blank lines
 						this.plugin.settings.IGNORED_FILE_GLOBS = ignoreLines
 
-						this.plugin.saveAllData()
+						await this.plugin.saveAllData()
 					}
 					)
 				text.inputEl.rows = 10

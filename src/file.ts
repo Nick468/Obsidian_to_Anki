@@ -8,7 +8,7 @@ import { Md5 } from 'ts-md5/dist/md5';
 import * as AnkiConnect from './anki'
 import * as c from './constants'
 import { FormatConverter } from './format'
-import { CachedMetadata, HeadingCache, App, TFile } from 'obsidian'
+import { CachedMetadata, HeadingCache, TFile } from 'obsidian'
 import obsidian_to_anki_plugin from '../main';
 
 //const double_regexp: RegExp = /(?:\r\n|\r|\n)+((?:\r\n|\r|\n){2}(?:<!--)?ID:\d+)/g
@@ -102,6 +102,7 @@ export class AllFile {
     
 
     constructor(file: TFile, file_content: string, file_cache: CachedMetadata, data: FileData, plugin: obsidian_to_anki_plugin) {    
+        this.plugin = plugin
         this.obsidian_file = file
         this.file_cache = file_cache
         this.data = data
@@ -164,9 +165,19 @@ export class AllFile {
         }
 
         // overwrtie default deck by settings -> folder settings
-        if(this.plugin.settings.FOLDER_DECKS[this.path]) //TODO: Check
-            this.data.template.deckName = this.plugin.settings.FOLDER_DECKS[this.path]
-
+        let path: string = this.path
+        do{
+            if(this.plugin.settings.FOLDER_DECKS[path]){
+                if(this.plugin.settings.FOLDER_DECKS[path].length > 0){
+                    this.data.template.deckName = this.plugin.settings.FOLDER_DECKS[path]
+                    break
+                }
+            }
+            let sections = path.split("/");
+            sections.pop();
+            path = sections.join("/");
+        }while(path.length > 0)
+    
         // in-file overwrite by TARGET DECK keyword
         let match = this.file_content.match(this.data.DECK_REGEXP)
         if(match)
@@ -179,9 +190,15 @@ export class AllFile {
         if(result)
             this.data.template.tags.push(...result[1].split(" ")) 
 
-        if(this.plugin.settings.FOLDER_TAGS[this.path])
-            this.data.template.tags.push(this.plugin.settings.FOLDER_TAGS[this.path])
-
+        let path: string = this.path
+        do{
+            if(this.plugin.settings.FOLDER_TAGS[path])
+                this.data.template.tags.push(this.plugin.settings.FOLDER_TAGS[path])
+            
+            let sections = path.split("/");
+            sections.pop();
+            path = sections.join("/");
+        }while(path.length > 0)
     }
 
     scanDeletions() {

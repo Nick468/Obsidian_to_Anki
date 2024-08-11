@@ -83,7 +83,7 @@ export default class obsidian_to_anki_plugin extends Plugin {
 			new Notice("Need to connect to Anki generate default settings...")
 			this.createDefaultSettings()
 			if (await this.createAnkiFileds()) {
-				this.saveAllData()
+				await this.saveAllData()
 				new Notice("Default settings successfully generated!")
 			}
 		} else {
@@ -102,12 +102,12 @@ export default class obsidian_to_anki_plugin extends Plugin {
 			file_hashes: this.file_hashes, 
 			fields_dict: this.fields_dict
 		}
-		this.saveData(dataToStore)
+		await this.saveData(dataToStore)
 	}
 
 	async deleteIDs(file:TFile){
 		let content = await this.app.vault.read(file)
-		const REPL_ID_REGEXP: RegExp = /^(<!--ID:\s\d{13}-->)/gm
+		const REPL_ID_REGEXP: RegExp = /(<!--ID:\s?\d{13}.*-->)/gm
 		content = content.replace(REPL_ID_REGEXP, "")
 		this.app.vault.modify(file, content)
 	}
