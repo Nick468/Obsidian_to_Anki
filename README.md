@@ -32,3 +32,4 @@ This is my fork of [Obsidian_to_Anki](https://github.com/Pseudonium/Obsidian_to_
 - [x] Implement custom clozing system
 - [x] Added extra field which will not get updated by the plugin -> you can write to it in anki and the field will not get deleted when updating the card
 - [ ] PDF support
+- [ ] Initiate second anki request to deleete empty decks
