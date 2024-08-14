@@ -137,7 +137,7 @@ export class FormatConverter {
 				console.warn("Link not working: ", link.displayText)
 				continue
 			}
-			note_text = note_text.replace(new RegExp(c.escapeRegex(link.original), "g"), '<a href="' + this.getUrlFromLink(link.link) + '">' + encodeURIComponent(link.displayText) + "</a>")
+			note_text = note_text.replace(new RegExp(c.escapeRegex(link.original), "g"), '<a href="' + this.getUrlFromLink(link.link) + '">' + link.displayText + "</a>")
 		}
 		return note_text
 	}
@@ -193,17 +193,17 @@ export class FormatConverter {
 	}
 
 	async format(note_text: string): Promise<string> {
+		// Extract inline math and math blocks
 		note_text = this.obsidian_to_anki_math(note_text)
-
-		//Extract inline math and math blocks
 		let math_matches: string[]
 		[note_text, math_matches] = this.censor(note_text, ANKI_MATH_REGEXP, MATH_REPLACE);
 
-		//Extract mermaid graphs and format them
+		// Extract mermaid graphs and format them
 		let mermaidMatches: string[]
 		[note_text, mermaidMatches] = this.censor(note_text, c.OBS_MERMAID_REGEXP, MERMAID_CODE_REPLACE);
 		mermaidMatches = this.formatMermaidMatches(mermaidMatches);
 
+		// handle cloze
 		if (this.plugin.settings.Defaults.CurlyCloze||this.plugin.settings.Defaults.AnkiCustomCloze) {
 			if (this.plugin.settings.Defaults.HighlightsToCloze) {
 				note_text = note_text.replace(HIGHLIGHT_REGEXP, "{$1}")
