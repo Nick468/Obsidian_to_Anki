@@ -50,10 +50,14 @@ export class FormatConverter {
     }
 
 	format_note_with_url(note: AnkiConnectNote, url: string, field: string, heading?: string): void {
+		// the first note.fields contains the title -> should be the display text of the link
+		// can only adress the first note.fields through fields_dict...
+		// note.fields[this.plugin.fields_dict[note.modelName][0]] = text of the title
+		
 		if(heading)
-			note.fields[field] += '<a href="' + url + "%23" + heading + '" class="obsidian-link">Obsidian</a>'
+			note.fields[field] += '<a href="' + url + "%23" + heading + '" class="obsidian-link">' + note.fields[this.plugin.fields_dict[note.modelName][0]] + '</a>'
 		else
-		note.fields[field] += '<a href="' + url + '" class="obsidian-link">Obsidian</a>'
+			note.fields[field] += '<a href="' + url + '" class="obsidian-link">' + note.fields[this.plugin.fields_dict[note.modelName][0]] + '</a>'
 	}
 
 	format_note_with_frozen_fields(note: AnkiConnectNote, frozen_fields_dict: Record<string, Record<string, string>>): void {
