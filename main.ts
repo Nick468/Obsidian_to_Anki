@@ -118,10 +118,12 @@ export default class obsidian_to_anki_plugin extends Plugin {
 		new Notice('Scanning vault, check console for details...');
 		console.info("Checking connection to Anki...")
 		try {
-			let result = await AnkiConnect.invoke('requestPermission')
-			console.log(result)
+			let result = await AnkiConnect.invoke('requestPermission') as any
+			if(result.permission !== "granted")
+				throw new Error("Permission not granted")
 		}
 		catch(e) {
+			console.log(e);
 			new Notice("Error, couldn't connect to Anki! Check console for error message.");
 			return;
 		}
