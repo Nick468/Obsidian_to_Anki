@@ -14,7 +14,6 @@ const TAG_PREFIX:string = "Tags: "
 export const TAG_SEP:string = " "
 export const ID_REGEXP_STR: string = String.raw`\n*<!--ID:\s?(\d{13})\s?(?:\[\[([^|#]*).*\]\]\s*)?-->`
 export const TAG_REGEXP_STR: string = String.raw`(Tags: .*)`
-const OBS_TAG_REGEXP: RegExp = /(?:\s|>)#(\w+)/g
 
 const ANKI_CLOZE_REGEXP: RegExp = /{{c\d+::[\s\S]+?}}/
 
@@ -51,6 +50,7 @@ abstract class AbstractNote {
         this.frozen_fields_dict = frozen_fields_dict
         this.data = data
         this.formatter = formatter
+        this.formatter.resetFormatter()
         this.plugin = plugin
     }
 
@@ -102,19 +102,11 @@ abstract class AbstractNote {
 		
         // add tags
         let tags:string[] = this.getTags()
-        if (this.plugin.settings.Defaults.AddObsidianTags) {
-			for (let key in newNote.fields) {
-				for (let match of newNote.fields[key].matchAll(OBS_TAG_REGEXP)) {
-					tags.push(match[1])
-				}
-				newNote.fields[key] = newNote.fields[key].replace(OBS_TAG_REGEXP, "")
-	        }
-		}
+        tags.push(...this.formatter.tags)
         newNote.tags.push(...tags)
 
         return {note: newNote, identifier: identifier}
     }
-
 }
 
 
@@ -250,6 +242,7 @@ export class RegexNote {
         this.frozen_fields_dict = frozen_fields_dict
         this.data = data
         this.formatter = formatter
+        this.formatter.resetFormatter()
         this.note_type = note_type
         this.plugin = plugin
     }
@@ -276,14 +269,12 @@ export class RegexNote {
 	}
 
 	async parse(match: Record<string, string>, url: string = "", context: string, filePath: string): Promise<AnkiConnectNoteAndID> {
-		this.match = match
-        
+        this.match = match 
         let newNote = JSON.parse(JSON.stringify(this.data.template))
         
         newNote.modelName = this.note_type
         let identifier: number|null = match.id ? parseInt(match.id) : null
 		let tags: string[] = match.tags ? match.tags.slice(TAG_PREFIX.length).split(TAG_SEP) : []
-
 
         if(match.link){
             let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
@@ -307,14 +298,8 @@ export class RegexNote {
             console.warn("Close error occured in file " + filePath)
             return null // An error code that says "don't add this note!"
 		}
-		if (this.plugin.settings.Defaults.AddObsidianTags) {
-			for (let key in newNote.fields) {
-				for (let match of newNote.fields[key].matchAll(OBS_TAG_REGEXP)) {
-					tags.push(match[1])
-				}
-				newNote.fields[key] = newNote.fields[key].replace(OBS_TAG_REGEXP, "")
-	        }
-		}
+
+        tags.push(...this.formatter.tags)
 		newNote.tags.push(...tags)
 		return {note: newNote, identifier: identifier}
 	}

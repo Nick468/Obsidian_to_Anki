@@ -1,6 +1,6 @@
 import { AnkiConnectNote } from './interfaces/note-interface'
 import { basename, extname } from 'path'
-import { CachedMetadata, MarkdownRenderer, Component, App } from 'obsidian'
+import { CachedMetadata, MarkdownRenderer, Component } from 'obsidian'
 import * as c from './constants'
 import { FileData } from './interfaces/settings-interface'
 import obsidian_to_anki_plugin from '../main'
@@ -32,10 +32,10 @@ function escapeHtml(unsafe: string): string {
 export class FormatConverter {
 
 	file_cache: CachedMetadata
-	vault_name: string
 	detectedMedia: Set<string>
 	plugin: obsidian_to_anki_plugin
 	path: string
+	tags: string[] = []
 
 
 	constructor(file_cache: CachedMetadata, data:FileData, path: string, plugin:obsidian_to_anki_plugin) {
@@ -45,8 +45,12 @@ export class FormatConverter {
 		this.plugin = plugin
 	}
 
+	resetFormatter(){
+		this.tags = []	
+	}
+
 	getUrlFromLink(link: string): string {
-        return "obsidian://open?vault=" + encodeURIComponent(this.vault_name) + String.raw`&file=` + encodeURIComponent(link)
+        return "obsidian://open?vault=" + encodeURIComponent(this.plugin.app.vault.getName()) + String.raw`&file=` + link
     }
 
 	format_note_with_url(note: AnkiConnectNote, url: string, field: string, heading?: string): void {
@@ -226,6 +230,14 @@ export class FormatConverter {
 	
 		//links in embeds are not handled in formatLinks, so do it here (but worse, beacause currently not using file cache)
 		this.formatEmbedLinks(container)
+
+		if (this.plugin.settings.Defaults.AddObsidianTags) {
+                let elements = container.querySelectorAll('a.tag');
+                for (let i = 0; i < elements.length; i++) {
+					 this.tags.push(elements[i].innerHTML.substring(1))
+					 elements[i].remove()
+                  }
+		}
 
 		note_text = container.innerHTML
 
