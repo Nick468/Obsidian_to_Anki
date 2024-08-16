@@ -161,14 +161,16 @@ export class FormatConverter {
 		return note_text
 	}
 
-	formatMermaidMatches(mermaidMatches: string[]){
-		for(let [idx, list_item] of mermaidMatches.entries()){
-			const MERMAID_BEG_REGEXP:RegExp = /```mermaid/g
-			const MERMAID_END_REGEXP:RegExp = /```/g
-			mermaidMatches[idx] = mermaidMatches[idx].replace(MERMAID_BEG_REGEXP, '<div class="mermaid">')
-			mermaidMatches[idx] = mermaidMatches[idx].replace(MERMAID_END_REGEXP, '</div>')
-			}
-		return mermaidMatches
+	formatMermaid(container: HTMLElement){
+		let elements = container.querySelectorAll("pre.language-mermaid")
+		for(let element of elements){
+			console.log(element)
+			let mermaidElement = document.createElement("pre")
+			mermaidElement.addClass("mermaid")
+			let code = (element as any).innerText
+			mermaidElement.innerHTML = code.slice(0,-5) // remove \nCopy
+			element.replaceWith(mermaidElement)
+		}
 	}
 
 	highlight_embed(note_text: string): string{
@@ -181,11 +183,6 @@ export class FormatConverter {
 		note_text = this.obsidian_to_anki_math(note_text)
 		let math_matches: string[]
 		[note_text, math_matches] = this.censor(note_text, ANKI_MATH_REGEXP, MATH_REPLACE);
-
-		// Extract mermaid graphs and format them
-		let mermaidMatches: string[]
-		[note_text, mermaidMatches] = this.censor(note_text, c.OBS_MERMAID_REGEXP, MERMAID_CODE_REPLACE);
-		mermaidMatches = this.formatMermaidMatches(mermaidMatches);
 
 		// handle cloze
 		if (this.plugin.settings.Defaults.CurlyCloze||this.plugin.settings.Defaults.AnkiCustomCloze) {
@@ -204,10 +201,9 @@ export class FormatConverter {
 		let component = new Component
 		await MarkdownRenderer.render(this.plugin.app, note_text, container, this.path, component)
 	
-		//links in embeds are not handled in formatLinks, so do it here (but worse, beacause currently not using file cache)
 		this.formatLinks(container)
 		this.getAndFormatMedias(container)
-
+		this.formatMermaid(container)
 
 		if (this.plugin.settings.Defaults.AddObsidianTags) {
                 let elements = container.querySelectorAll('a.tag');
@@ -218,11 +214,8 @@ export class FormatConverter {
 		}
 
 		note_text = container.innerHTML
-
 		note_text = this.highlight_embed(note_text)
-
 		note_text = this.decensor(note_text, MATH_REPLACE, math_matches, true).trim()
-		note_text = this.decensor(note_text, MERMAID_CODE_REPLACE, mermaidMatches, false)
 		
 		return note_text
 	}
