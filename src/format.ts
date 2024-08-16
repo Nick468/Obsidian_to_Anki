@@ -143,11 +143,6 @@ export class FormatConverter {
 		  }
 	}
 
-	formatCallouts(note_text: string): string {
-		note_text = note_text.replace(CALLOUTS_REGEXP, "{$1}")
-		return note_text	
-	}
-
 	censor(note_text: string, regexp: RegExp, mask: string): [string, string[]] {
 		/*Take note_text and replace every match of regexp with mask, simultaneously adding it to a string array*/
 		let matches: string[] = []
@@ -203,8 +198,6 @@ export class FormatConverter {
 				note_text = this.curly_to_cloze(note_text)
 			}
 		}
-
-		note_text = this.formatCallouts(note_text)
 		
 		//convert markdown to html
 		let container: HTMLElement = document.createElement('converter')
