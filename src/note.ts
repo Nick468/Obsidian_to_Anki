@@ -263,7 +263,6 @@ export class RegexNote {
             if(!fields[key])
                 continue
             fields[key] = await this.formatter.format(fields[key].trim())
-            fields[key].trim()
         }
         return fields
 	}
