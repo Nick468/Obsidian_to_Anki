@@ -139,7 +139,6 @@ export class FileManager {
         }
 
         // Get the note_ids for the newly created cards reported from anki
-        // add them to the note object, then call writeID 
         if(additionRequest != null){
             let new_note_ids: Requests1Result[0]["result"]
             try {
@@ -162,7 +161,7 @@ export class FileManager {
               }
         }
 
-        // write the newly found note ids to the file
+        // write the newly found note ids to the file and remove to-be-deleted notes
         for (let file of this.files) {
             file.writeIDs()
             file.fix_newline_ids()

@@ -11,9 +11,6 @@ import { FormatConverter } from './format'
 import { CachedMetadata, HeadingCache, TFile } from 'obsidian'
 import obsidian_to_anki_plugin from '../main';
 
-//const double_regexp: RegExp = /(?:\r\n|\r|\n)+((?:\r\n|\r|\n){2}(?:<!--)?ID:\d+)/g
-const double_regexp: RegExp = /(?:\n)+(\n{2}<!--ID:\d+.*)/g
-
 function id_to_str(identifier: number, inline: boolean = false, comment: boolean = false): string {
     let result = "ID:" + identifier.toString()
     if (comment) {
@@ -402,9 +399,13 @@ export class AllFile {
         this.file_content = string_insert(this.file_content, inserts)
     }
 
-    //ensure that not more than 2 newlines are present before the tag comment
+    //ensures that exactly 2 newlines are present before the id comment
     fix_newline_ids() {
-        this.file_content = this.file_content.replace(double_regexp, "$1")
+        const additionalNewline: RegExp = /(?:\n)+(\n{2}<!--ID:\d+.*)/g
+        this.file_content = this.file_content.replaceAll(additionalNewline, "$1")
+        
+        const missingNewline: RegExp = new RegExp(String.raw`(?<=.)(\n<!--ID:\s?\d+.*-->)(?!\n` + c.escapeRegex(this.plugin.settings.Syntax['End Note']) + String.raw`)`, "g")
+        this.file_content = this.file_content.replaceAll(missingNewline, "\n$1")
     }
 
     formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string> {
