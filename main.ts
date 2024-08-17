@@ -33,7 +33,6 @@ export default class obsidian_to_anki_plugin extends Plugin {
 				ScanDirectory: "",
 				GlobalTag: "Obsidian_to_Anki",
 				GlobalDeck: "Default",
-				EmbedColour: "rgba(245, 248, 249, 0.85)",
 				SchedulingInterval: 0,
 				MirrorObsidianStructure: false,
 				AddFileLink: false,

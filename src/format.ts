@@ -1,19 +1,13 @@
 import { AnkiConnectNote } from './interfaces/note-interface'
-import { basename, extname } from 'path'
 import { CachedMetadata, MarkdownRenderer, Component } from 'obsidian'
 import * as c from './constants'
 import { FileData } from './interfaces/settings-interface'
 import obsidian_to_anki_plugin from '../main'
 
 const ANKI_MATH_REGEXP:RegExp = /(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))/g
-const CALLOUTS_REGEXP:RegExp = /(?:>\s?\[!\w+\]-?\+?\s?)(.*)(?:\n\s*>.*)*/g
-
 const MATH_REPLACE:string = "OBSTOANKIMATH"
-const MERMAID_CODE_REPLACE = "OBSTOANKIMERMAIDDISPLAY"
 
-const HIGHLIGHT_REGEXP:RegExp = /==(.*?)==/g
 const CLOZE_REGEXP:RegExp = /(?:(?<!{){(?:c?(\d+)[:|])?(?!{))((?:[^\n][\n]?)+?)(?:(?<!})}(?!}))/g
-
 let cloze_unset_num: number = 1
 
 function escapeHtml(unsafe: string): string {
@@ -34,7 +28,7 @@ export class FormatConverter {
 	tags: string[] = []
 
 
-	constructor(file_cache: CachedMetadata, data:FileData, path: string, plugin:obsidian_to_anki_plugin) {
+	constructor(file_cache: CachedMetadata, path: string, plugin:obsidian_to_anki_plugin) {
 		this.file_cache = file_cache
 		this.detectedMedia = new Set()
 		this.path = path
@@ -85,17 +79,23 @@ export class FormatConverter {
 		return result
 	}
 
-	curly_to_cloze(text: string): string {
-		/*Change text in curly brackets to Anki-formatted cloze.*/
-		text = text.replace(CLOZE_REGEXP, this.cloze_repl)
-		cloze_unset_num = 1
-		return text
-	}
+	formatCloze(container: HTMLElement){
+		if (!this.plugin.settings.Defaults.CurlyCloze && !this.plugin.settings.Defaults.AnkiCustomCloze)
+			return
 
-	custom_cloze_JS(text: string): string {
-		/*Use custom JS cloze in anki card; Format difference: single ":"*/
-		text = text.replace(CLOZE_REGEXP, "{{c1:" + "$2" + "}}")
-		return text
+		if (this.plugin.settings.Defaults.HighlightsToCloze) {
+			let elements = container.querySelectorAll('mark')
+			for(let element of elements)
+				element.outerHTML = "{" + element.innerHTML + "}"
+		}
+
+		if(this.plugin.settings.Defaults.AnkiCustomCloze){
+			container.innerHTML = container.innerHTML.replace(CLOZE_REGEXP, "{{c1:" + "$2" + "}}")
+		} else{
+			container.innerHTML = container.innerHTML.replace(CLOZE_REGEXP, this.cloze_repl)
+			cloze_unset_num = 1
+		}
+		
 	}
 
 	getAndFormatMedias(container: HTMLElement) {
@@ -164,7 +164,6 @@ export class FormatConverter {
 	formatMermaid(container: HTMLElement){
 		let elements = container.querySelectorAll("pre.language-mermaid")
 		for(let element of elements){
-			console.log(element)
 			let mermaidElement = document.createElement("pre")
 			mermaidElement.addClass("mermaid")
 			let code = (element as any).innerText
@@ -173,29 +172,25 @@ export class FormatConverter {
 		}
 	}
 
-	highlight_embed(note_text: string): string{
-		return note_text.replaceAll(`<div class="markdown-preview-view markdown-rendered show-indentation-guide">`, 
-									`<div class="markdown-preview-view markdown-rendered show-indentation-guide" style="background-color:` + this.plugin.settings.Defaults.EmbedColour + `;">`)
+	formatTags(container: HTMLElement){
+		if (!this.plugin.settings.Defaults.AddObsidianTags)
+			return
+		
+		let elements = container.querySelectorAll('a.tag');
+		for (let i = 0; i < elements.length; i++) {
+				this.tags.push(elements[i].innerHTML.substring(1))
+				elements[i].remove()
+		}
 	}
 
 	async format(note_text: string): Promise<string> {
 		// Extract inline math and math blocks
+		// MarkdownRenderer.render fucks up math blocks... Idk why
+		// This means that math blocks of embeds don't work
 		note_text = this.obsidian_to_anki_math(note_text)
 		let math_matches: string[]
 		[note_text, math_matches] = this.censor(note_text, ANKI_MATH_REGEXP, MATH_REPLACE);
 
-		// handle cloze
-		if (this.plugin.settings.Defaults.CurlyCloze||this.plugin.settings.Defaults.AnkiCustomCloze) {
-			if (this.plugin.settings.Defaults.HighlightsToCloze) {
-				note_text = note_text.replace(HIGHLIGHT_REGEXP, "{$1}")
-			}
-			if(this.plugin.settings.Defaults.AnkiCustomCloze){
-				note_text = this.custom_cloze_JS(note_text)
-			} else{
-				note_text = this.curly_to_cloze(note_text)
-			}
-		}
-		
 		//convert markdown to html
 		let container: HTMLElement = document.createElement('converter')
 		let component = new Component
@@ -204,17 +199,10 @@ export class FormatConverter {
 		this.formatLinks(container)
 		this.getAndFormatMedias(container)
 		this.formatMermaid(container)
-
-		if (this.plugin.settings.Defaults.AddObsidianTags) {
-                let elements = container.querySelectorAll('a.tag');
-                for (let i = 0; i < elements.length; i++) {
-					 this.tags.push(elements[i].innerHTML.substring(1))
-					 elements[i].remove()
-                  }
-		}
+		this.formatTags(container)
+		this.formatCloze(container)
 
 		note_text = container.innerHTML
-		note_text = this.highlight_embed(note_text)
 		note_text = this.decensor(note_text, MATH_REPLACE, math_matches, true).trim()
 		
 		return note_text

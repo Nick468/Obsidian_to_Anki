@@ -32,7 +32,6 @@ export interface PluginSettings {
 		ScanDirectory: string,
 		GlobalTag: string,
 		GlobalDeck: string,
-		EmbedColour: string,
 		SchedulingInterval: number,
 		MirrorObsidianStructure: boolean,
 		AddFileLink: boolean,

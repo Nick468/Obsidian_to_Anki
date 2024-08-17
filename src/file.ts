@@ -120,7 +120,7 @@ export class AllFile {
         this.setup_fileDefault_tags()
 
         
-        this.formatter = new FormatConverter(file_cache, data, this.path, plugin)
+        this.formatter = new FormatConverter(file_cache, this.path, plugin)
         
     }
 

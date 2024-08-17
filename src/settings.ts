@@ -5,7 +5,6 @@ const defaultDescs = {
 	ScanDirectory: ["Scan Directory", "The directory to scan. Leave empty to scan the entire vault"],
 	GlobalTag: ["Global Tag", "The tag that the plugin automatically adds to any generated cards."],
 	GlobalDeck: ["Global Deck", "The deck the plugin adds cards to if TARGET DECK is not specified in the file."],
-	EmbedColour: ["Colour of embeds", "Colour of markdown file embeds"],
 	SchedulingInterval: ["Scheduling Interval", "The time, in minutes, between automatic scans of the vault. Set this to 0 to disable automatic scanning."],
 	AddFileLink: ["Add File Link", "Append a link to the file that generated the flashcard on the field specified in the table."],
 	AddContext: ["Add Context", "Append 'context' for the card, in the form of path > heading > heading etc, to the field specified in the table."],
