@@ -122,6 +122,7 @@ export default class obsidian_to_anki_plugin extends Plugin {
 
 			try {
 				plugins.disablePlugin("sheets")
+				console.info("Deactivated sheets plugin")
 				disabledSheetsPlugin = true
 			} catch (error) {
 				new Notice(`Error: ${error}`)
@@ -189,6 +190,7 @@ export default class obsidian_to_anki_plugin extends Plugin {
 		if(disabledSheetsPlugin){
 			try {
 				plugins.enablePlugin("sheets")
+				console.info("Reactivated sheets plugin")
 			} catch (error) {
 				new Notice(`Error: ${error}`)
 			}
