@@ -112,8 +112,24 @@ export default class obsidian_to_anki_plugin extends Plugin {
 	}
 
 	async scanVault(scanDirOverwrite?:TAbstractFile) {
+		// disable https://github.com/NicoNekoru/obsidan-advanced-table-xt plugin as it breaks the table rendering
+		let disabledSheetsPlugin: boolean = false
+		// @ts-ignore-next-line
+		const plugins = this.app.plugins
+		for(let plugin of plugins.enabledPlugins){
+			if(plugin !== "sheets")
+				continue
+
+			try {
+				plugins.disablePlugin("sheets")
+				disabledSheetsPlugin = true
+			} catch (error) {
+				new Notice(`Error: ${error}`)
+			}
+			break
+		}
+
 		// test connection to anki
-		// TODO: Parse requestPermission result
 		new Notice('Scanning vault, check console for details...');
 		console.info("Checking connection to Anki...")
 		try {
@@ -128,8 +144,7 @@ export default class obsidian_to_anki_plugin extends Plugin {
 		}
 		new Notice("Successfully connected to Anki! This could take a few minutes - please don't close Anki until the plugin is finished");
 		const fileData: FileData = await settingToFileData(this.settings, this.fields_dict);
-		//const fileManagerData: fileManagerData = await settingstoFileManagerData(this.settings)
-		
+
 
 		let scanDir;
 		if(scanDirOverwrite == null){
@@ -170,6 +185,15 @@ export default class obsidian_to_anki_plugin extends Plugin {
 		for (let key in hashes) {
 			this.file_hashes[key] = hashes[key]
 		}
+		
+		if(disabledSheetsPlugin){
+			try {
+				plugins.enablePlugin("sheets")
+			} catch (error) {
+				new Notice(`Error: ${error}`)
+			}
+		}
+
 		new Notice("All done! Saving file hashes and added media now...")
 		this.saveAllData()
 	}
