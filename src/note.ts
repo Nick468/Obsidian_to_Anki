@@ -37,7 +37,6 @@ abstract class AbstractNote {
     split_text: string[]
     field_names: string[]
     current_field: string
-    ID_REGEXP: RegExp = /<!--ID:\s?(\d{13})\s?(?:\[\[([^|#]*).*\]\]\s*)?-->/
     
     plugin: obsidian_to_anki_plugin    
     fields_dict: FIELDS_DICT
@@ -117,7 +116,7 @@ export class Note extends AbstractNote {
     }
 
     getIdentifierAndDeckOverwrite(): [number | null, string] {
-        const match = this.split_text[this.split_text.length-1].match(this.ID_REGEXP)
+        const match = this.split_text[this.split_text.length-1].match(new RegExp(ID_REGEXP_STR))
         if(match == null)    
             return [null, null]
 
@@ -177,7 +176,7 @@ export class InlineNote extends AbstractNote {
     }
 
     getIdentifierAndDeckOverwrite(): [number | null, string] {
-        const match = this.text.match(this.ID_REGEXP)
+        const match = this.text.match(new RegExp(ID_REGEXP_STR))
         if(!match)
             return [null, null]
 

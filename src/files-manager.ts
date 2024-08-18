@@ -102,9 +102,8 @@ export class FileManager {
     async requests_1() {
         let requests: AnkiConnect.AnkiConnectRequest[] = []
         let additionRequest: AllFile[] = null
-        let createDeckRequest: boolean = false
 
-        this.requestHelper(requests, this.createNewDecks, "Requesting addition of new decks for new notes...", true) ? createDeckRequest = true : createDeckRequest = false
+        this.requestHelper(requests, this.createNewDecks, "Requesting addition of new decks for new notes...")
         additionRequest = this.requestHelper(requests, this.getAddNotes, "Requesting addition of new notes ...", true)
         this.requestHelper(requests, this.getUpdateNotes, "Requesting editing of existing notes...") 
         this.requestHelper(requests, this.getDeleteNotes, "Requesting deletion of notes..")
@@ -112,12 +111,12 @@ export class FileManager {
         this.addMediaRequest(requests)
 
         if(requests.length > 0){
-            const requests_1_result: Requests1Result = ((await AnkiConnect.invoke('multi', {actions: requests}) as Array<Object>) as any)
-            await this.parse_requests_1(requests_1_result, createDeckRequest, additionRequest)
+            const requests_1_result: Requests1Result = (await AnkiConnect.invoke('multi', {actions: requests})) as Requests1Result
+            await this.parse_requests_1(requests_1_result, additionRequest)
         }
     }
 
-    async parse_requests_1(response:Requests1Result, createDeckRequest:boolean, additionRequest: AllFile[]) {
+    async parse_requests_1(response:Requests1Result, additionRequest: AllFile[]) {
         // print all anki errors to the console
         for(let i = 0; i<5; i++){
             if(!response[i])
@@ -128,6 +127,8 @@ export class FileManager {
                 for(let j = 0; j<response[i].result.length; j++){
                     if(response[i].result[j].error)
                         console.log("Error: " + response[i].result[j].error)
+                    if(!response[i].result[j].result)
+                        continue
                     else{
                         for(let k = 0; k<response[i].result[j].result.length; k++){
                             if(response[i].result[j].result[k].error)
@@ -142,10 +143,7 @@ export class FileManager {
         if(additionRequest != null){
             let new_note_ids: Requests1Result[0]["result"]
             try {
-                if(createDeckRequest)
-                    new_note_ids = AnkiConnect.parse(response[1])
-                else
-                    new_note_ids = AnkiConnect.parse(response[0])
+                new_note_ids = AnkiConnect.parse(response[1])
             } catch(error) {
                 console.error("Error: ", error)
                 new_note_ids = response[0].result

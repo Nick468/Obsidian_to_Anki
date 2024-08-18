@@ -237,7 +237,7 @@ export class AllFile {
 
     removeEmpties() {
         //removes notes with the DELETE keyword
-        this.file_content = this.file_content.replace(this.data.EMPTY_REGEXP, "")
+        this.file_content = this.file_content.replaceAll(this.data.EMPTY_REGEXP, "")
     }
 
     add_spans_to_ignore() {
@@ -399,12 +399,14 @@ export class AllFile {
         this.file_content = string_insert(this.file_content, inserts)
     }
 
-    //ensures that exactly 2 newlines are present before the id comment
     fix_newline_ids() {
-        const additionalNewline: RegExp = /(?:\n)+(\n{2}<!--ID:\d+.*)/g
+        //ensures that exactly 2 newlines are present before the id comment
+
+        const additionalNewline: RegExp = /(?:\n)+(\n{2}<!--ID:.*-->)/g
         this.file_content = this.file_content.replaceAll(additionalNewline, "$1")
         
-        const missingNewline: RegExp = new RegExp(String.raw`(?<=.)(\n<!--ID:\s?\d+.*-->)(?!\n` + c.escapeRegex(this.plugin.settings.Syntax['End Note']) + String.raw`)`, "g")
+        // tests for End Note in the next line to only move the id comments of regex-note (not regular notes)
+        const missingNewline: RegExp = new RegExp(String.raw`(?<=.)(\n<!--ID:.*-->)(?!\n` + c.escapeRegex(this.plugin.settings.Syntax['End Note']) + String.raw`)`, "g")
         this.file_content = this.file_content.replaceAll(missingNewline, "\n$1")
     }
 

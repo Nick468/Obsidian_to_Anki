@@ -102,8 +102,14 @@ export class FormatConverter {
 		// Pdf embed
 		let elements = container.querySelectorAll('span.pdf-embed')
 		for(let element of elements){
-			let fileName = element.getAttribute("src").split('.pdf')[0] + ".pdf"
-			let pageNumber = new RegExp(/#page=(\d+)/g).exec(element.getAttribute("src"))[1]
+			
+			const fileName = element.getAttribute("src").split('.pdf')[0] + ".pdf"
+
+			const regexResult =  new RegExp(/#page=(\d+)/g).exec(element.getAttribute("src"))
+			let pageNumber = "1"
+			if(regexResult)
+				pageNumber = regexResult[1]
+			
 			this.detectedMedia.add(fileName)
 			
 			// Format: <canvas id="pdf" data-src="/file.pdf" data-page="N"></canvas>
@@ -193,8 +199,7 @@ export class FormatConverter {
 
 		//convert markdown to html
 		let container: HTMLElement = document.createElement('converter')
-		let component = new Component
-		await MarkdownRenderer.render(this.plugin.app, note_text, container, this.path, component)
+		await MarkdownRenderer.render(this.plugin.app, note_text, container, this.path, new Component)
 	
 		this.formatLinks(container)
 		this.getAndFormatMedias(container)
