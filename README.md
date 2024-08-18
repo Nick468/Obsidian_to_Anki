@@ -11,8 +11,8 @@ This is my fork of [Obsidian_to_Anki](https://github.com/Pseudonium/Obsidian_to_
 
 ## Stuff I changed
 - [x] rewrote *almost* everything to make future modifications easier
-- [x] Fixed many internal regex strings leading to false positives, false negatives, catastrophic backtracking...
-	- use  `^#+\s(.+)\n*((?:\n+(?!#+\s|<!--).+)+)` as [Header-Paragraph-Style](https://github.com/ObsidianToAnki/Obsidian_to_Anki/wiki/Header-paragraph-style)
+	- [x] Fixed many internal regex strings leading to false positives, false negatives, catastrophic backtracking...
+		- use  `^#+\s(.+)\n*((?:\n+(?!#+\s|<!--).+)+)` as [Header-Paragraph-Style](https://github.com/ObsidianToAnki/Obsidian_to_Anki/wiki/Header-paragraph-style)
 - [x] New markdown renderer (obsidian's inbuilt one, not showdown)
 	- [x] Make embeds of markdown files possible
 	- [x] Parse markdown-horizontal lines correctly
