@@ -99,29 +99,8 @@ export class FormatConverter {
 	}
 
 	getAndFormatMedias(container: HTMLElement) {
-		// Pdf embed
-		let elements = container.querySelectorAll('span.pdf-embed')
-		for(let element of elements){
-			
-			const fileName = element.getAttribute("src").split('.pdf')[0] + ".pdf"
-
-			const regexResult =  new RegExp(/#page=(\d+)/g).exec(element.getAttribute("src"))
-			let pageNumber = "1"
-			if(regexResult)
-				pageNumber = regexResult[1]
-			
-			this.detectedMedia.add(fileName)
-			
-			// Format: <canvas id="pdf" data-src="/file.pdf" data-page="N"></canvas>
-			let canvas = document.createElement('canvas');
-			canvas.id = "pdf"
-			canvas.setAttribute('data-src', '/' + fileName);
-			canvas.setAttribute('data-page', pageNumber)
-			element.replaceWith(canvas)
-		}
-
 		// Image embed
-		elements = container.querySelectorAll('img')
+		let elements = container.querySelectorAll('img')
 		for(let element of elements){
 			let fileName = element.getAttribute("alt")
 			this.detectedMedia.add(fileName)
@@ -134,6 +113,33 @@ export class FormatConverter {
 			let fileName = element.getAttribute("src")
 			this.detectedMedia.add(fileName)
 			element.children[0].setAttribute("src", fileName)
+		}
+
+		// Pdf embed
+		elements = container.querySelectorAll('span.pdf-embed')
+		for(let element of elements){
+			
+			let fileName = element.getAttribute("src").split('.pdf')[0] + ".pdf"
+
+			let regexResult =  new RegExp(/#page=(\d+)/g).exec(element.getAttribute("src"))
+			let pageNumber = "1"
+			if(regexResult)
+				pageNumber = regexResult[1]
+			
+			this.detectedMedia.add(fileName)
+			
+			// Format: <canvas id="pdf" data-src="/file.pdf" data-page="N"></canvas>
+			let canvas = document.createElement('canvas');
+			canvas.id = "pdf"
+			canvas.setAttribute('data-src', '/' + fileName);
+			canvas.setAttribute('data-page', pageNumber)
+			element.replaceWith(canvas)
+			
+			// adds the pdf as an img (won't load, so is hidden) so anki doesn't flag the pdf as unreferenced media
+			let img = document.createElement('img')
+			img.setAttribute("src", fileName)
+			img.setAttribute("hidden", "hidden")
+			canvas.insertAdjacentElement('afterend', img)			
 		}
 	}
 
