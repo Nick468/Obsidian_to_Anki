@@ -157,3 +157,47 @@ This is my fork of [Obsidian_to_Anki](https://github.com/Pseudonium/Obsidian_to_
  /* Disable title of embed (to match my obsidian config) */
 div.markdown-embed-title{display:none}
 ```
+## For devs
+- I had a relativly hard time to understand the flow of the program at first. So I created a rough outline of the function call graph:
+```mermaid
+sequenceDiagram
+participant User
+main->>main:onLoad()
+main->>main:loadStoredData()
+main->>main:addSettingTab()
+Note over main:Add commands
+User-->main: scanVault()
+Note over main: disable sheets plugin<br/>check Anki Connection<br/>generate scanDir
+main->> fileManager: initialiseFiles()
+fileManager->>fileManager:genallFiles()
+fileManager->>file: scanFile()
+file->>file:scanNotes()
+participant not as note
+file->>not:parse()
+Note over not:build the note<br/>...
+not->>not:getFields()
+not->>formatter:format()
+Note over formatter:convert markdown to HTML<br/>handle embeds<br/>handle special formatting
+file->>file:scanInlineNotes()
+file->>not:parse()
+Note over not:build the note<br/>...
+not->>not:getFields()
+not->>formatter:format()
+Note over formatter:convert markdown to HTML<br/>handle embeds<br/>handle special formatting
+file->>file:search
+file->>not:parse()
+Note over not:build the note<br/>...
+not->>not:getFields()
+not->>formatter:format()
+Note over formatter:convert markdown to HTML<br/>handle embeds<br/>handle special formatting
+file->>file:scanDeletions()
+main->>fileManager: requests_1()
+Note over fileManager: build anki request
+fileManager->>fileManager:parse_requests_1
+Note over fileManager:Print all errors<br/>get new note ids
+fileManager->>file:writeIds()
+fileManager->>file:fix_newline_ids()
+fileManager->>file:removeEmpties()
+Note over fileManager:Actually modify the<br/>file with the changes
+Note over main: generate hashes<br/>reactivate sheets plugin
+```
