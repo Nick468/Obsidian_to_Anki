@@ -56,5 +56,4 @@ export interface FileData {
 	NOTE_REGEXP: RegExp
 	INLINE_REGEXP: RegExp
 	EMPTY_REGEXP: RegExp
-	ID_REGEXP_STR: string
 }
