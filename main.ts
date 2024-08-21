@@ -2,7 +2,7 @@ import { Notice, Plugin, addIcon, TFile, TFolder, TAbstractFile} from 'obsidian'
 import * as AnkiConnect from './src/anki'
 import { PluginSettings, FileData, storedDataInterface} from './src/interfaces/settings-interface'
 import { DEFAULT_IGNORED_FILE_GLOBS, SettingsTab } from './src/settings'
-import { ANKI_ICON } from './src/constants'
+import { ANKI_ICON, ID_REGEXP_STR } from './src/constants'
 import { settingToFileData } from './src/setting-to-data'
 import { FileManager } from './src/files-manager'
 
@@ -34,6 +34,7 @@ export default class obsidian_to_anki_plugin extends Plugin {
 				GlobalTag: "Obsidian_to_Anki",
 				GlobalDeck: "Default",
 				SchedulingInterval: 0,
+				UseObsidianComment: false,
 				MirrorObsidianStructure: false,
 				AddFileLink: false,
 				AddContext: false,
@@ -106,8 +107,7 @@ export default class obsidian_to_anki_plugin extends Plugin {
 
 	async deleteIDs(file:TFile){
 		let content = await this.app.vault.read(file)
-		const REPL_ID_REGEXP: RegExp = /(<!--ID:\s?\d{13}.*-->)/gm
-		content = content.replace(REPL_ID_REGEXP, "")
+		content = content.replace(/ID_REGEXP_STR/g, "")
 		this.app.vault.modify(file, content)
 	}
 
@@ -173,7 +173,7 @@ export default class obsidian_to_anki_plugin extends Plugin {
 			} else {
 				console.info("Only scanning file: " + scanDir.name);
 			}
-			manager = new FileManager(this, fileData, /*fileManagerData,*/ scanDir, this.file_hashes, this.added_media);
+			manager = new FileManager(this, fileData, scanDir, this.file_hashes, this.added_media);
 		} else {
 			//shouldt be empty, but I am leaving this here for possible fuck ups
 			throw new Error('scanDir is empty');

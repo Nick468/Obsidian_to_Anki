@@ -13,7 +13,8 @@ const defaultDescs = {
 	CurlyCloze: ["Curly Cloze", "Convert {cloze deletions} -> {{c1::cloze deletions}} on note types that have a 'Cloze' in their name."],
 	HighlightsToCloze: ["Highlights to Cloze", "Convert ==highlights== -> {highlights} to be processed by CurlyCloze."],
 	AnkiCustomCloze: ["Anki Custom Cloze", "Does not use the default anki cloze system (instead JS card) to allow normal notes and clozed notes in one note type."],
-	MirrorObsidianStructure:["Mirror Obsidian Folder Structure", "Uses the path of a file in obsidian as the deck."]
+	MirrorObsidianStructure:["Mirror Obsidian Folder Structure", "Uses the path of a file in obsidian as the deck."],
+	UseObsidianComment: ["Use %% instead of <!-- for id comments","This allows links in id comments to be automatically updated when renaming a file"]
 }
 
 export const DEFAULT_IGNORED_FILE_GLOBS = [

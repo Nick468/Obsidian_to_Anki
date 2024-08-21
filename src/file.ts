@@ -3,26 +3,13 @@
 import { FROZEN_FIELDS_DICT } from './interfaces/field-interface'
 import { AnkiConnectNoteAndID } from './interfaces/note-interface'
 import { FileData } from './interfaces/settings-interface'
-import { Note, InlineNote, RegexNote,  ID_REGEXP_STR, TAG_REGEXP_STR } from './note'
+import { Note, InlineNote, RegexNote, TAG_REGEXP_STR } from './note'
 import { Md5 } from 'ts-md5/dist/md5';
 import * as AnkiConnect from './anki'
 import * as c from './constants'
 import { FormatConverter } from './format'
 import { CachedMetadata, HeadingCache, TFile } from 'obsidian'
 import obsidian_to_anki_plugin from '../main';
-
-function id_to_str(identifier: number, inline: boolean = false, comment: boolean = false): string {
-    let result = "ID:" + identifier.toString()
-    if (comment) {
-        result = "<!--" + result + "-->"
-    }
-    if (inline) {
-        result += " "
-    } else {
-        result += "\n"
-    }
-    return result
-}
 
 function string_insert(text: string, position_inserts: Array<[number, string]>): string {
     /*Insert strings in position_inserts into text, at indices.
@@ -119,6 +106,21 @@ export class AllFile {
         
         this.formatter = new FormatConverter(file_cache, this.path, plugin)
         
+    }
+
+    id_to_str(identifier: number, inline: boolean = false, comment: boolean = false): string {
+        let result = "ID:" + identifier.toString()
+        if (comment && !this.plugin.settings.Defaults.UseObsidianComment)
+            result = "<!--" + result + "-->"
+        else if(comment && this.plugin.settings.Defaults.UseObsidianComment)
+            result = "%%" + result + "%%"
+    
+        if (inline) {
+            result += " "
+        } else {
+            result += "\n"
+        }
+        return result
     }
 
     setup_frozen_fields_dict() {
@@ -327,7 +329,7 @@ export class AllFile {
         //and adding any matches to ignore_spans.
         for (let search_id of [true, false]) {
             for (let search_tags of [true, false]) {
-                let id_str = search_id ? ID_REGEXP_STR : ""
+                let id_str = search_id ? String.raw`\n*` + c.ID_REGEXP_STR : ""
                 let tag_str = search_tags ? TAG_REGEXP_STR : ""
                 let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
                 for (let match of findignore(regexp, this.file_content, this.ignore_spans)) {
@@ -385,29 +387,31 @@ export class AllFile {
         let inserts: [number, string][] = []
         
         for (let note of this.regular_notes_to_add){
-            inserts.push([note.identifierPosition, id_to_str(note.identifier, false, this.plugin.settings.Defaults.IDComments)])
+            inserts.push([note.identifierPosition, this.id_to_str(note.identifier, false, this.plugin.settings.Defaults.IDComments)])
         }
         
         for(let note of this.inline_notes_to_add){
-            inserts.push([note.identifierPosition, id_to_str(note.identifier, true, this.plugin.settings.Defaults.IDComments)])
+            inserts.push([note.identifierPosition, this.id_to_str(note.identifier, true, this.plugin.settings.Defaults.IDComments)])
         }
                 
         for (let note of this.regex_notes_to_add){
-            inserts.push([note.identifierPosition, "\n" + "\n" + id_to_str(note.identifier, false, this.plugin.settings.Defaults.IDComments)])
+            inserts.push([note.identifierPosition, "\n" + "\n" + this.id_to_str(note.identifier, false, this.plugin.settings.Defaults.IDComments)])
         }
 
         this.file_content = string_insert(this.file_content, inserts)
     }
 
     fix_newline_ids() {
-        //ensures that exactly 2 newlines are present before the id comment
-
-        const additionalNewline: RegExp = /(?:\n)+(\n{2}<!--ID:.*-->)/g
-        this.file_content = this.file_content.replaceAll(additionalNewline, "$1")
+        // ensures that exactly 2 newlines are present before the id comment
         
-        // tests for End Note in the next line to only move the id comments of regex-note (not regular notes)
-        const missingNewline: RegExp = new RegExp(String.raw`(?<=.)(\n<!--ID:.*-->)(?!\n` + c.escapeRegex(this.plugin.settings.Syntax['End Note']) + String.raw`)`, "g")
-        this.file_content = this.file_content.replaceAll(missingNewline, "\n$1")
+        // 1. check that there are not more than two new lines
+        const additionalNewline: RegExp = new RegExp(String.raw`(?:\n)+(\n{2}` + c.ID_REGEXP_STR + String.raw`)`, "g")
+        this.file_content = this.file_content.replaceAll(additionalNewline, "$1")
+
+        // 2. check that there are not less than two new lines
+        // negative lookahead: tests for End Note in the next line to only move the id comments of regex-notes (not regular notes)
+        const missingNewline: RegExp = new RegExp(String.raw`(?<=.)(\n` + c.ID_REGEXP_STR + String.raw`)(?!\n` + c.escapeRegex(this.plugin.settings.Syntax['End Note']) + String.raw`)`, "g")
+        this.file_content = this.file_content.replace(missingNewline, "\n$1")
     }
 
     formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string> {

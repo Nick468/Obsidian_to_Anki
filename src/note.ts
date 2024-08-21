@@ -8,11 +8,11 @@ import { AnkiConnectNote, AnkiConnectNoteAndID } from './interfaces/note-interfa
 import { FIELDS_DICT, FROZEN_FIELDS_DICT } from './interfaces/field-interface'
 import { FileData } from './interfaces/settings-interface'
 import obsidian_to_anki_plugin from '../main'
+import { ID_REGEXP_STR } from './constants'
 
 
 const TAG_PREFIX:string = "Tags: "
 export const TAG_SEP:string = " "
-export const ID_REGEXP_STR: string = String.raw`\n*<!--ID:\s?(\d{13})\s?(?:\[\[([^|#]*).*\]\]\s*)?-->`
 export const TAG_REGEXP_STR: string = String.raw`(Tags: .*)`
 
 const ANKI_CLOZE_REGEXP: RegExp = /{{c\d+::[\s\S]+?}}/
@@ -116,7 +116,7 @@ export class Note extends AbstractNote {
     }
 
     getIdentifierAndDeckOverwrite(): [number | null, string] {
-        const match = this.split_text[this.split_text.length-1].match(new RegExp(ID_REGEXP_STR))
+        const match = this.split_text[this.split_text.length-1].match(new RegExp(String.raw`\n*` + ID_REGEXP_STR))
         if(match == null)    
             return [null, null]
 
@@ -176,7 +176,7 @@ export class InlineNote extends AbstractNote {
     }
 
     getIdentifierAndDeckOverwrite(): [number | null, string] {
-        const match = this.text.match(new RegExp(ID_REGEXP_STR))
+        const match = this.text.match(new RegExp(String.raw`\n*` + ID_REGEXP_STR))
         if(!match)
             return [null, null]
 

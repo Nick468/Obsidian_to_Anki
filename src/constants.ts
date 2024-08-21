@@ -3,6 +3,7 @@ export const ANKI_ICON: string = `<path fill="currentColor" stroke="currentColor
 export const OBS_INLINE_MATH_REGEXP: RegExp = /\$((?=[\S])(?=[^$])[\s\S]*?\S)\$/g
 export const OBS_DISPLAY_MATH_REGEXP: RegExp = /\$\$([^\$]*?)\$\$/g
 export const OBS_MERMAID_REGEXP:RegExp = /```mermaid[\s\S]*?```/g
+export const ID_REGEXP_STR = String.raw`(?:<!--|%%)ID:\s?(\d{13})\s?(?:\[\[([^|#]*).*\]\]\s*)?(?:-->|%%)`
 
 
 export const CODE_CSS_URL = `https://cdn.jsdelivr.net/npm/highlightjs-themes@1.0.0/arta.css`
