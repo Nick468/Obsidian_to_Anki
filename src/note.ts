@@ -103,7 +103,8 @@ abstract class AbstractNote {
         // add tags
         let tags:string[] = this.getTags()
         tags.push(...this.formatter.tags)
-        tags.push(...idTags)
+        if(idTags)
+            tags.push(...idTags)
         newNote.tags.push(...tags)
 
         return {note: newNote, identifier: identifier}
@@ -124,7 +125,9 @@ export class Note extends AbstractNote {
 
         this.split_text.pop()
         
-        let tags = match[3].match(ID_Tags_REGEXP)
+        let tags = null
+        if(match[3])
+            tags = match[3].match(ID_Tags_REGEXP)
 
         return [parseInt(match[1]), 
                 new linkToDeckResolver().linkToDeckResolver(match[2], this.plugin), 
@@ -186,7 +189,9 @@ export class InlineNote extends AbstractNote {
         if(!match)
             return [null, null, null]
 
-        let tags = match[3].match(ID_Tags_REGEXP)
+        let tags = null
+        if(match[3])
+            tags = match[3].match(ID_Tags_REGEXP)
 
         return [parseInt(match[1]), 
                 new linkToDeckResolver().linkToDeckResolver(match[2], this.plugin),
@@ -306,7 +311,9 @@ export class RegexNote {
 
         tags.push(...this.formatter.tags)
         if(match.idTags){
-            tags.push(...match.idTags.match(ID_Tags_REGEXP))
+            let idTagsArr = match.idTags.match(ID_Tags_REGEXP)
+            if(idTagsArr)
+                tags.push(...idTagsArr)
         }
 		newNote.tags.push(...tags)
 		return {note: newNote, identifier: identifier}
