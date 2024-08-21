@@ -4,7 +4,7 @@ Input must be the note text.
 Does NOT deal with finding the note in the file.*/
 
 import { FormatConverter } from './format'
-import { AnkiConnectNote, AnkiConnectNoteAndID } from './interfaces/note-interface'
+import { AnkiConnectNote, AnkiConnectNoteAndID, RegexMatch } from './interfaces/note-interface'
 import { FIELDS_DICT, FROZEN_FIELDS_DICT } from './interfaces/field-interface'
 import { FileData } from './interfaces/settings-interface'
 import obsidian_to_anki_plugin from '../main'
@@ -12,6 +12,7 @@ import { ID_REGEXP_STR } from './constants'
 
 
 const TAG_PREFIX:string = "Tags: "
+const ID_Tags_REGEXP: RegExp = /(?<=#)[\w\-\/]+/g
 export const TAG_SEP:string = " "
 export const TAG_REGEXP_STR: string = String.raw`(Tags: .*)`
 
@@ -55,7 +56,7 @@ abstract class AbstractNote {
 
     abstract getSplitText(): string[]
 
-    abstract getIdentifierAndDeckOverwrite(): [number | null, string]
+    abstract getIdentifierAndDeckOverwrite(): [number, string, string[]]
 
     abstract getTags(): string[]
 
@@ -78,7 +79,7 @@ abstract class AbstractNote {
         let newNote = JSON.parse(JSON.stringify(this.data.template))
 		newNote.modelName = note_type
 
-        let [identifier, deckOverwrite]: [number|null, string] = this.getIdentifierAndDeckOverwrite()
+        let [identifier, deckOverwrite, idTags]: [number, string, string[]] = this.getIdentifierAndDeckOverwrite()
         newNote.deckName = deckOverwrite ? deckOverwrite : this.data.template.deckName
                 
         newNote.fields = await this.getFields()
@@ -102,6 +103,7 @@ abstract class AbstractNote {
         // add tags
         let tags:string[] = this.getTags()
         tags.push(...this.formatter.tags)
+        tags.push(...idTags)
         newNote.tags.push(...tags)
 
         return {note: newNote, identifier: identifier}
@@ -115,14 +117,18 @@ export class Note extends AbstractNote {
         return this.text.split("\n")
     }
 
-    getIdentifierAndDeckOverwrite(): [number | null, string] {
+    getIdentifierAndDeckOverwrite(): [number, string, string[]] {
         const match = this.split_text[this.split_text.length-1].match(new RegExp(String.raw`\n*` + ID_REGEXP_STR))
         if(match == null)    
-            return [null, null]
+            return [null, null, null]
 
         this.split_text.pop()
-        let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
-        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.plugin)]
+        
+        let tags = match[3].match(ID_Tags_REGEXP)
+
+        return [parseInt(match[1]), 
+                new linkToDeckResolver().linkToDeckResolver(match[2], this.plugin), 
+                tags]
     }
 
     getTags(): string[] {
@@ -175,13 +181,16 @@ export class InlineNote extends AbstractNote {
         return this.text.split(" ")
     }
 
-    getIdentifierAndDeckOverwrite(): [number | null, string] {
+    getIdentifierAndDeckOverwrite(): [number, string, string[]] {
         const match = this.text.match(new RegExp(String.raw`\n*` + ID_REGEXP_STR))
         if(!match)
-            return [null, null]
+            return [null, null, null]
 
-        let linkToDeck: linkToDeckResolver = new linkToDeckResolver()
-        return [parseInt(match[1]), linkToDeck.linkToDeckResolver(match[2], this.plugin)]
+        let tags = match[3].match(ID_Tags_REGEXP)
+
+        return [parseInt(match[1]), 
+                new linkToDeckResolver().linkToDeckResolver(match[2], this.plugin),
+                tags]
     }
 
     getTags(): string[] {
@@ -227,7 +236,6 @@ export class RegexNote {
     plugin: obsidian_to_anki_plugin
 
     field_names: string[]
-	match: Record<string, string>
 	note_type: string
 	groups: Array<string>	
 
@@ -246,7 +254,7 @@ export class RegexNote {
         this.plugin = plugin
     }
 
-	async getFields(): Promise<Record<string, string>> {
+	async getFields(match: RegexMatch): Promise<Record<string, string>> {
 		let fields: Record<string, string> = {}
         for (let field of this.field_names) {           
             if(field === this.plugin.settings.noteTypes[this.note_type].extra_field)
@@ -255,8 +263,8 @@ export class RegexNote {
             fields[field] = ""
         }
 
-        fields[this.field_names[0]] = this.match["title"]
-        fields[this.field_names[1]] = this.match["text"]
+        fields[this.field_names[0]] = match["title"]
+        fields[this.field_names[1]] = match["text"]
 		
         for (let key in fields) {
             if(!fields[key])
@@ -266,8 +274,7 @@ export class RegexNote {
         return fields
 	}
 
-	async parse(match: Record<string, string>, url: string = "", context: string, filePath: string): Promise<AnkiConnectNoteAndID> {
-        this.match = match 
+	async parse(match: RegexMatch, url: string = "", context: string, filePath: string): Promise<AnkiConnectNoteAndID> {
         let newNote = JSON.parse(JSON.stringify(this.data.template))
         
         newNote.modelName = this.note_type
@@ -281,7 +288,7 @@ export class RegexNote {
         else
             newNote.deckName = this.data.template.deckName
 		  
-		newNote.fields = await this.getFields()
+		newNote.fields = await this.getFields(match)
 		if (url) {
             this.formatter.format_note_with_url(newNote, url, this.plugin.settings.noteTypes[this.note_type].file_link_field, match.title)
         }
@@ -298,6 +305,9 @@ export class RegexNote {
 		}
 
         tags.push(...this.formatter.tags)
+        if(match.idTags){
+            tags.push(...match.idTags.match(ID_Tags_REGEXP))
+        }
 		newNote.tags.push(...tags)
 		return {note: newNote, identifier: identifier}
 	}

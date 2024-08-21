@@ -1,7 +1,6 @@
 import { AnkiConnectNote } from './interfaces/note-interface'
 import { CachedMetadata, MarkdownRenderer, Component } from 'obsidian'
 import * as c from './constants'
-import { FileData } from './interfaces/settings-interface'
 import obsidian_to_anki_plugin from '../main'
 
 const ANKI_MATH_REGEXP:RegExp = /(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))/g

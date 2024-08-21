@@ -14,3 +14,13 @@ export interface AnkiConnectNoteAndID {
 	identifier: number | null
 	identifierPosition?: number
 }
+
+export interface RegexMatch {
+	allMatch: string,
+	title: string,
+	text: string,
+	tags?: string,
+	id?: string,
+	link?: string,
+	idTags?: string
+}

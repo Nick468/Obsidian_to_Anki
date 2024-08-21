@@ -1,7 +1,7 @@
 /*Performing plugin operations on markdown file contents*/
 
 import { FROZEN_FIELDS_DICT } from './interfaces/field-interface'
-import { AnkiConnectNoteAndID } from './interfaces/note-interface'
+import { AnkiConnectNoteAndID, RegexMatch } from './interfaces/note-interface'
 import { FileData } from './interfaces/settings-interface'
 import { Note, InlineNote, RegexNote, TAG_REGEXP_STR } from './note'
 import { Md5 } from 'ts-md5/dist/md5';
@@ -334,7 +334,7 @@ export class AllFile {
                 let regexp: RegExp = new RegExp(regexp_str + tag_str + id_str, 'gm')
                 for (let match of findignore(regexp, this.file_content, this.ignore_spans)) {
                     this.ignore_spans.push([match.index, match.index + match[0].length])
-                    let matchObj = this.formatMatchDict(match, search_id, search_tags)
+                    let regexMatch: RegexMatch = this.formatMatchDict(match, search_id, search_tags)
                     const parsed: AnkiConnectNoteAndID = await new RegexNote(
                         this.frozen_fields_dict,
                         this.formatter,
@@ -342,7 +342,7 @@ export class AllFile {
                         note_type,
                         this.plugin
                     ).parse(
-                        matchObj,
+                        regexMatch,
                         this.url,
                         this.plugin.settings.Defaults.AddContext ? this.getContextAtIndex(match.index) : "",
                         this.path
@@ -414,27 +414,25 @@ export class AllFile {
         this.file_content = this.file_content.replace(missingNewline, "\n$1")
     }
 
-    formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): Record<string, string> {
-        let match: Record<string, string> = {
-            "allMatch": matchArr[0],
-            "title": matchArr[1],
-            "text": matchArr[2],
-        }
-
+    formatMatchDict(matchArr: RegExpMatchArray, search_id: boolean, search_tags: boolean): RegexMatch {
+        let regexMatch: RegexMatch = {allMatch: matchArr[0], title : matchArr[1], text: matchArr[2]}
+        
         let iterator = 3
 
         if (search_tags) {
-            match["tags"] = matchArr[iterator]
+            regexMatch.tags = matchArr[iterator]
             iterator++
         }
 
         if (search_id) {
-            match["id"] = matchArr[iterator]
+            regexMatch.id = matchArr[iterator]
             iterator++
-            match["link"] = matchArr[iterator]
+            regexMatch.link = matchArr[iterator]
+            iterator++
+            regexMatch.idTags = matchArr[iterator]
         }
 
-        return match
+        return regexMatch
     }
 
 
