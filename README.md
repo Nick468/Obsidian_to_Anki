@@ -2,12 +2,12 @@
 This is my fork of [Obsidian_to_Anki](https://github.com/Pseudonium/Obsidian_to_Anki) (Plugin to add flashcards from a text or markdown file to Anki). It started out as a few simple modifications, but I found the codebase so convoluted that I pretty much rewrote the entire project. I added some features I thought were lacking in the origianl and tried to keep as much of the old functionality as was reasonable. 
 
 ## Caution
-- This fork is far less tested. There will be bugs.
+- This fork is far less tested. There will be bugs (especially with non-regex notes).
 - This fork is not 100 % compatible with the original project. The anki cards *should* transfer over, but you will have to setup the plugin from scratch and get used to a few quirks.
 
 ## Things no longer working
-- [x] Removing all tests
-- [x] Removing the python scripts
+- [x] Removed all tests
+- [x] Removed the python scripts
 
 ## Stuff I changed
 - [x] rewrote *almost* everything to make future modifications easier
@@ -21,15 +21,183 @@ This is my fork of [Obsidian_to_Anki](https://github.com/Pseudonium/Obsidian_to_
 	- [x] Remove obsidian comments from cards
 	- [x] Format strikethrough correctly on anki card
 	- [x] Handling of callouts
-	- [x] Handling of mermaid graphs (needs special anki card)
-	- [x] Added support for webp images
 - [x] New UI
 	- [x] New settings page
 	- [x] New Interface for scan current file only and scan selected folder (right clicking)
-- [x] Insert link on anki card to open the correct section of the obsidian note directly (not just the entire note)
-- [x] Mirror the obsidian directory as the anki deck structure
-- [x] Support for a link in id comment to overwrite the anki deck (allows you to save a card (section of a note) in a differernt deck)
-- [x] Implement custom clozing system
-- [x] Added extra field which will not get updated by the plugin -> you can write to it in anki and the field will not get deleted when updating the card
-- [ ] PDF support
-- [ ] Initiate second anki request to deleete empty decks
+- [X] New deck features
+	- [x] Mirror the obsidian directory as the anki deck structure
+	- [x] Support for a link in id comment to overwrite the anki deck (allows you to save a card (section of a note) in a differernt deck)
+	- [ ] Initiate second anki request to deleete empty decks
+- [X] New card features
+	- [x] Insert link on anki card to open the correct section of the obsidian note directly (not just the entire note)
+	- [x] Implement custom clozing system
+	- [x] Added extra field which will not get updated by the plugin -> you can write to it in anki and the field will not get deleted when updating the card
+	- [x] PDF support (needs special anki note type)
+ 	- [x] Handling of mermaid graphs (needs special anki note type)
+
+
+## Example for anki note type
+### Front
+```html
+{{#Link}}
+{{Link}}
+{{/Link}}
+{{^Link}}
+{{Title}}
+{{/Link}}
+{{#Extra}}
+<hr>
+{{Extra}}
+{{/Extra}}
+{{#Context}}
+<hr>
+{{Context}}
+{{/Context}}
+<a id= "hint" href="#" style="display: none"
+    onclick="this.style.display='none';
+    document.getElementById('data').style.visibility='visible';
+    return false;">
+    <hr>
+    Show cloze
+</a>
+<span id="data" style="visibility: hidden"></span>
+<script>
+    text = String.raw`{{Text}}`
+    text = `<hr>` + text
+    if(text.includes("\{\{c")){	
+    	let pattern = /\{\{c\d:.+?}}/g;
+    	text = text.replace(pattern,`<span style="color:blue;">[...]</span>`)
+    	document.getElementById("data").innerHTML = text
+    	document.getElementById("hint").style.display='block'
+    }
+</script>
+<script src="_mermaid.min.js"></script>
+<script>mermaid.init();</script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.6.172/pdf.min.js"></script>
+<script>
+    var pdfElements = document.querySelectorAll("[id='pdf']");   
+    pdfElements.forEach(function(pdfElement) {
+      pdfjsLib.getDocument(pdfElement.dataset.src).promise.then(function(pdf) {
+        pdf.getPage(parseInt(pdfElement.dataset.page)).then(function(page) {
+          const scale = 0.8;
+          const viewport = page.getViewport({ scale: scale });
+          const context = pdfElement.getContext('2d');
+          pdfElement.width = viewport.width;
+          pdfElement.height = viewport.height;
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          page.render(renderContext);
+        });
+      });
+    });
+</script>
+```
+### Back
+```html
+{{#Link}}
+{{Link}}
+{{/Link}}
+{{^Link}}
+{{Title}}
+{{/Link}}
+{{#Extra}}
+<hr>
+{{Extra}}
+{{/Extra}}
+{{#Context}}
+<hr>
+{{Context}}
+{{/Context}}
+<hr>
+<span id="data"></span>
+<script>
+    text = String.raw`{{Text}}`
+    text = text.replaceAll(/\{\{c\d:(.+?)}}/g,"<span style=\"color:blue;\">$1</span>")
+    document.getElementById("data").innerHTML = text
+</script>
+<script src="_mermaid.min.js"></script>
+<script>mermaid.init();</script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.6.172/pdf.min.js"></script>
+<script>
+    var pdfElements = document.querySelectorAll("[id='pdf']");   
+    pdfElements.forEach(function(pdfElement) {
+      pdfjsLib.getDocument(pdfElement.dataset.src).promise.then(function(pdf) {
+        pdf.getPage(parseInt(pdfElement.dataset.page)).then(function(page) {
+          const scale = 0.8;
+          const viewport = page.getViewport({ scale: scale });
+          const context = pdfElement.getContext('2d');
+          pdfElement.width = viewport.width;
+          pdfElement.height = viewport.height;
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          page.render(renderContext);
+        });
+      });
+    });
+</script>
+```
+### CSS
+```html
+.card {
+    font-family: arial;
+    font-size: 20px;
+    text-align: center;
+    color: black;
+    background-color: white;
+}
+
+ /* Background color for embeds */
+.markdown-preview-view.markdown-rendered.show-indentation-guide {background-color: rgba(245, 248,
+ 249, 0.85)}
+
+ /* Disable title of embed (to match my obsidian config) */
+div.markdown-embed-title{display:none}
+```
+## For devs
+- I had a relativly hard time to understand the flow of the program at first. So I created a rough outline of the function call graph:
+```mermaid
+sequenceDiagram
+participant User
+main->>main:onLoad()
+main->>main:loadStoredData()
+main->>main:addSettingTab()
+Note over main:Add commands
+User-->main: scanVault()
+Note over main: disable sheets plugin<br/>check Anki Connection<br/>generate scanDir
+main->> fileManager: initialiseFiles()
+fileManager->>fileManager:genallFiles()
+fileManager->>file: scanFile()
+file->>file:scanNotes()
+participant not as note
+file->>not:parse()
+Note over not:build the note<br/>...
+not->>not:getFields()
+not->>formatter:format()
+Note over formatter:convert markdown to HTML<br/>handle embeds<br/>handle special formatting
+file->>file:scanInlineNotes()
+file->>not:parse()
+Note over not:build the note<br/>...
+not->>not:getFields()
+not->>formatter:format()
+Note over formatter:convert markdown to HTML<br/>handle embeds<br/>handle special formatting
+file->>file:search
+file->>not:parse()
+Note over not:build the note<br/>...
+not->>not:getFields()
+not->>formatter:format()
+Note over formatter:convert markdown to HTML<br/>handle embeds<br/>handle special formatting
+file->>file:scanDeletions()
+main->>fileManager: requests_1()
+Note over fileManager: build anki request
+fileManager->>fileManager:parse_requests_1
+Note over fileManager:Print all errors<br/>get new note ids
+fileManager->>file:writeIds()
+fileManager->>file:fix_newline_ids()
+fileManager->>file:removeEmpties()
+Note over fileManager:Actually modify the<br/>file with the changes
+Note over main: generate hashes<br/>reactivate sheets plugin
+```
